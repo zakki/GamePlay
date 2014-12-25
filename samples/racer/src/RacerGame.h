@@ -2,6 +2,7 @@
 #define TEMPLATEGAME_H_
 
 #include "gameplay.h"
+#include "HMD.h"
 
 using namespace gameplay;
 
@@ -125,6 +126,7 @@ private:
     Gamepad* _gamepad;
     Gamepad* _physicalGamepad;
     Gamepad* _virtualGamepad;
+    HMD* _hmd;
     AnimationClip* _virtualGamepadClip;
     PhysicsVehicle* _carVehicle;
     float _upsetTimer;

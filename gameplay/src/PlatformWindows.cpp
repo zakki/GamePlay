@@ -15,6 +15,11 @@
 #ifdef GP_USE_GAMEPAD
 #include <XInput.h>
 #endif
+#include "OVR.h"
+#include "OVR_Kernel.h"
+#include "OVR_CAPI.h"
+#include "OVR_CAPI_GL.h"
+#include "OVR_Stereo.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -41,6 +46,11 @@ static POINT __mouseCapturePoint = { 0, 0 };
 static bool __multiSampling = false;
 static bool __cursorVisible = true;
 static unsigned int __gamepadsConnected = 0;
+
+ovrHmd __HMD;
+float __fovSideTanMax;
+ovrEyeRenderDesc __eyeRenderDesc[2];
+ovrTexture __eyeTexture[2];
 
 #ifdef GP_USE_GAMEPAD
 static const unsigned int XINPUT_BUTTON_COUNT = 14;
@@ -454,6 +464,16 @@ LRESULT CALLBACK __WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (wParam == VK_CAPITAL)
             capsOn = !capsOn;
 
+        if (__HMD)
+        {
+            ovrHSWDisplayState hswDisplayState;
+            ovrHmd_GetHSWDisplayState(__HMD, &hswDisplayState);
+            if (hswDisplayState.Displayed && ovrHmd_DismissHSWDisplay(__HMD)) {
+                ovrHmd_DismissHSWDisplay(__HMD);
+                //HSWDisplayCurrentlyDisplayed = false;
+            }
+        }
+
         gameplay::Platform::keyEventInternal(gameplay::Keyboard::KEY_PRESS, getKey(wParam, shiftDown ^ capsOn));
         break;
         
@@ -498,6 +518,8 @@ struct WindowCreationParams
     bool fullscreen;
     bool resizable;
     int samples;
+    bool hmd;
+    bool debughmd;
 };
 
 extern void print(const char* format, ...)
@@ -521,6 +543,15 @@ extern int strcmpnocase(const char* s1, const char* s2)
     return _strcmpi(s1, s2);
 }
 
+static Matrix fromOvrMatrix(const OVR::Matrix4f mat)
+{
+    return Matrix(
+        mat.M[0][0], mat.M[0][1], mat.M[0][2], mat.M[0][3],
+        mat.M[1][0], mat.M[1][1], mat.M[1][2], mat.M[1][3],
+        mat.M[2][0], mat.M[2][1], mat.M[2][2], mat.M[2][3],
+        mat.M[3][0], mat.M[3][1], mat.M[3][2], mat.M[3][3]);
+}
+
 Platform::Platform(Game* game)
     : _game(game)
 {
@@ -530,6 +561,23 @@ Platform::~Platform()
 {
     if (__hwnd)
     {
+        HMD* hmd = HMD::getHMD();
+        if (hmd)
+        {
+            delete hmd;
+            HMD::setHMD(nullptr);
+        }
+        wglMakeCurrent(NULL, NULL);
+        if (__hrc)
+        {
+            wglDeleteContext(__hrc);
+            __hrc = NULL;
+        }
+        if (__HMD)
+        {
+            ovrHmd_Destroy(__HMD);
+            ovr_Shutdown();
+        }
         DestroyWindow(__hwnd);
         __hwnd = 0;
     }
@@ -817,6 +865,8 @@ Platform* Platform::create(Game* game)
     params.rect.right = 0;
     params.rect.bottom = 0;
     params.samples = 0;
+    params.hmd = true;
+    params.debughmd = false;
     if (game->getConfig())
     {
         Properties* config = game->getConfig()->getNamespace("window", true);
@@ -857,14 +907,44 @@ Platform* Platform::create(Game* game)
                 params.rect.right = params.rect.left + width;
             if (height != 0)
                 params.rect.bottom = params.rect.top + height;
+
+            // Read hmd state.
+            params.hmd = config->getBool("hmd", true);
+            params.debughmd = config->getBool("debughmd");
         }
     }
 
-    // If window size was not specified, set it to a default value
-    if (params.rect.right == 0)
-        params.rect.right = params.rect.left + DEFAULT_RESOLUTION_X;
-    if (params.rect.bottom == 0)
-        params.rect.bottom = params.rect.top + DEFAULT_RESOLUTION_Y;
+    // Setup Oculus
+    if (params.hmd)
+    {
+        ovr_Initialize();
+        __HMD = ovrHmd_Create(0);
+        if (!__HMD && params.debughmd)
+        {
+            __HMD = ovrHmd_CreateDebug(ovrHmd_DK2);
+        }
+    }
+
+    if (__HMD && __HMD->HmdCaps & ovrHmdCap_ExtendDesktop)
+    {
+        params.rect.right = params.rect.left + __HMD->Resolution.w;
+        params.rect.bottom = params.rect.top + __HMD->Resolution.h;
+    }
+    else if (__HMD)
+    {
+        if (params.rect.right == 0)
+            params.rect.right = params.rect.left + 1100;
+        if (params.rect.bottom == 0)
+            params.rect.bottom = params.rect.top + 618;
+    }
+    else
+    {
+        // If window size was not specified, set it to a default value
+        if (params.rect.right == 0)
+            params.rect.right = params.rect.left + DEFAULT_RESOLUTION_X;
+        if (params.rect.bottom == 0)
+            params.rect.bottom = params.rect.top + DEFAULT_RESOLUTION_Y;
+    }
     int width = params.rect.right - params.rect.left;
     int height = params.rect.bottom - params.rect.top;
 
@@ -962,6 +1042,117 @@ Platform* Platform::create(Game* game)
     }
 #endif
 
+    RenderState::initialize();
+    FrameBuffer::initialize();
+
+    if (__HMD)
+    {
+        __fovSideTanMax = OVR::FovPort::Max(__HMD->DefaultEyeFov[0], __HMD->DefaultEyeFov[1]).GetMaxSideTan();
+
+        // Configure OpenGL.
+        ovrGLConfig cfg;
+        cfg.OGL.Header.API = ovrRenderAPI_OpenGL;
+        //	cfg.OGL.Header.BackBufferSize = OVR::Sizei(__HMD->Resolution.w, __HMD->Resolution.h);
+        cfg.OGL.Header.BackBufferSize = OVR::Sizei(width, height);
+        cfg.OGL.Header.Multisample = params.samples;
+        cfg.OGL.Window = __hwnd;
+        cfg.OGL.DC = __hdc;
+
+        ovrFovPort eyeFov[2];
+        eyeFov[0] = __HMD->DefaultEyeFov[0];
+        eyeFov[1] = __HMD->DefaultEyeFov[1];
+
+        // Most apps should use the default, but reducing Fov does reduce rendering cost.
+        eyeFov[0] = OVR::FovPort::Min(eyeFov[0], OVR::FovPort(__fovSideTanMax));
+        eyeFov[1] = OVR::FovPort::Min(eyeFov[1], OVR::FovPort(__fovSideTanMax));
+        unsigned distortionCaps = ovrDistortionCap_Chromatic
+            | ovrDistortionCap_TimeWarp
+            | ovrDistortionCap_Overdrive;
+
+        ovrBool result = ovrHmd_ConfigureRendering(__HMD, &cfg.Config, distortionCaps,
+            eyeFov, __eyeRenderDesc);
+
+        // Configure Stereo settings.
+        OVR::Sizei texSizes[2];
+        OVR::Sizei eyeRenderSizes[2];
+        OVR::Sizei recommenedTexSize[2];
+
+        recommenedTexSize[0] = ovrHmd_GetFovTextureSize(__HMD, ovrEye_Left, eyeFov[0], 1.0f);
+        recommenedTexSize[1] = ovrHmd_GetFovTextureSize(__HMD, ovrEye_Right, eyeFov[1], 1.0f);
+
+        HMD* hmd = new HMD();
+        //pRendertargetTexture = pRender->CreateTexture(Texture_RGBA | Texture_RenderTarget | eyeRenderMultisample, renderTargetSize.w, renderTargetSize.h, NULL);
+#if 1
+        std::string id = "OVR_BOTH";
+        int w = recommenedTexSize[0].w + recommenedTexSize[1].w;
+        int h = max(recommenedTexSize[0].h, recommenedTexSize[1].h);
+        FrameBuffer* ovrRenderTarget = FrameBuffer::create("OVR", w, h);
+        DepthStencilTarget* dst = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, w, h);
+        ovrRenderTarget->setDepthStencilTarget(dst);
+        dst->release();
+        hmd->setFrameBuffer(2, ovrRenderTarget);
+        ovrRenderTarget->release();
+
+        // The actual RT size may be different due to HW limits.
+        for (int i = 0; i < 2; i++) {
+            texSizes[i].w = ovrRenderTarget->getWidth() / 2;
+            texSizes[i].h = ovrRenderTarget->getHeight();
+            eyeRenderSizes[i] = OVR::Sizei::Min(texSizes[i], recommenedTexSize[i]);
+        }
+
+        ovrGLTextureData* tex0 = (ovrGLTextureData*)(__eyeTexture + 0);
+        tex0->Header.API = ovrRenderAPI_OpenGL;
+        tex0->Header.TextureSize.w = ovrRenderTarget->getWidth();
+        tex0->Header.TextureSize.h = ovrRenderTarget->getHeight();
+        tex0->Header.RenderViewport = OVR::Recti(OVR::Vector2i(0), eyeRenderSizes[0]);
+        tex0->TexId = ovrRenderTarget->getRenderTarget()->getTexture()->getHandle();
+
+        ovrGLTextureData* tex1 = (ovrGLTextureData*)(__eyeTexture + 1);
+        tex1->Header.API = ovrRenderAPI_OpenGL;
+        tex1->Header.TextureSize.w = ovrRenderTarget->getWidth();
+        tex1->Header.TextureSize.h = ovrRenderTarget->getHeight();
+        tex1->Header.RenderViewport = OVR::Recti(OVR::Vector2i(ovrRenderTarget->getWidth() / 2 + 1, 0), eyeRenderSizes[0]);
+        tex1->TexId = ovrRenderTarget->getRenderTarget()->getTexture()->getHandle();
+
+        hmd->setViewport(0, Rectangle(eyeRenderSizes[0].w, eyeRenderSizes[0].h));
+        hmd->setViewport(1, Rectangle(ovrRenderTarget->getWidth() / 2 + 1, 0, eyeRenderSizes[1].w, eyeRenderSizes[1].h));
+#else
+        for (unsigned int i = 0; i < ovrEye_Count; i++) {
+			std::string id = "OVR" + std::to_string(i);
+            FrameBuffer* ovrRenderTarget = FrameBuffer::create("OVR", recommenedTexSize[i].w, recommenedTexSize[i].h);
+            DepthStencilTarget* dst = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, recommenedTexSize[i].w, recommenedTexSize[i].h);
+            ovrRenderTarget->setDepthStencilTarget(dst);
+            dst->release();
+            hmd->setFrameBuffer(i, ovrRenderTarget);
+            ovrRenderTarget->release();
+
+            // The actual RT size may be different due to HW limits.
+            texSizes[i].w = ovrRenderTarget->getWidth();
+            texSizes[i].h = ovrRenderTarget->getHeight();
+
+            eyeRenderSizes[i] = OVR::Sizei::Min(texSizes[i], recommenedTexSize[i]);
+
+            ovrGLTextureData* tex = (ovrGLTextureData*)(__eyeTexture + i);
+            tex->Header.API = ovrRenderAPI_OpenGL;
+            tex->Header.TextureSize.w = ovrRenderTarget->getWidth();
+            tex->Header.TextureSize.h = ovrRenderTarget->getHeight();
+            tex->Header.RenderViewport = OVR::Recti(eyeRenderSizes[i]);
+            tex->TexId = ovrRenderTarget->getRenderTarget()->getTexture()->getHandle();
+
+            hmd->setViewport(i, Rectangle(eyeRenderSizes[i].w, eyeRenderSizes[i].h));
+        }
+#endif
+
+        ovrHmd_ConfigureTracking(__HMD, ovrTrackingCap_Orientation |
+            ovrTrackingCap_MagYawCorrection |
+            ovrTrackingCap_Position, 0);
+        ovrHmd_RecenterPose(__HMD);
+
+        ovrHmd_AttachToWindow(__HMD, __hwnd, NULL, NULL);
+
+        HMD::setHMD(hmd);
+    }
+
     return platform;
 
 error:
@@ -983,7 +1174,7 @@ int Platform::enterMessagePump()
     GP_ASSERT(__timeTicksPerMillis);
     __timeStart = queryTime.QuadPart / __timeTicksPerMillis;
 
-    SwapBuffers(__hdc);
+    //SwapBuffers(__hdc);
 
     if (_game->getState() != Game::RUNNING)
         _game->run();
@@ -1023,8 +1214,39 @@ int Platform::enterMessagePump()
                 }
             }
 #endif
-            _game->frame();
-            SwapBuffers(__hdc);
+
+            if (__HMD)
+            {
+                ovrFrameTiming hmdFrameTiming = ovrHmd_BeginFrame(__HMD, 0);
+                ovrPosef headPose[2];
+
+                ovrTrackingState hmdState;
+                ovrVector3f hmdToEyeViewOffset[2] = { __eyeRenderDesc[0].HmdToEyeViewOffset, __eyeRenderDesc[1].HmdToEyeViewOffset };
+                ovrHmd_GetEyePoses(__HMD, 0, hmdToEyeViewOffset, headPose, &hmdState);
+                HMD* hmd = HMD::getHMD();
+
+                for (int eyeIndex = 0; eyeIndex < ovrEye_Count; eyeIndex++)
+                {
+                    ovrEyeType eye = __HMD->EyeRenderOrder[eyeIndex];
+
+                    OVR::Matrix4f orientation(headPose[eye].Orientation);
+                    hmd->setHeadOrientation(eye, fromOvrMatrix(orientation));
+                    Vector3 headPosition(headPose[eye].Position.x, headPose[eye].Position.y, headPose[eye].Position.z);
+                    hmd->setHeadPosition(eye, headPosition);
+
+                    OVR::Matrix4f proj(ovrMatrix4f_Projection(__eyeRenderDesc[eye].Fov,
+                        0.01f, 10000.0f, true));
+                    hmd->setProjection(fromOvrMatrix(proj));
+                }
+                _game->frame();
+
+                ovrHmd_EndFrame(__HMD, headPose, __eyeTexture);
+            }
+            else
+            {
+                _game->frame();
+                SwapBuffers(__hdc);
+            }
         }
 
         // If we are done, then exit.
@@ -1046,6 +1268,9 @@ bool Platform::canExit()
 
 unsigned int Platform::getDisplayWidth()
 {
+    HMD* hmd = HMD::getHMD();
+    if (hmd)
+        return hmd->getViewport(0).width;
     static RECT rect;
     GetClientRect(__hwnd, &rect);
     return rect.right;
@@ -1053,6 +1278,9 @@ unsigned int Platform::getDisplayWidth()
 
 unsigned int Platform::getDisplayHeight()
 {
+    HMD* hmd = HMD::getHMD();
+    if (hmd)
+        return hmd->getViewport(0).height;
     static RECT rect;
     GetClientRect(__hwnd, &rect);
     return rect.bottom;

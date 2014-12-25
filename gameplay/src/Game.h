@@ -14,6 +14,7 @@
 #include "Rectangle.h"
 #include "Vector4.h"
 #include "TimeListener.h"
+#include "HMD.h"
 
 namespace gameplay
 {
@@ -505,6 +506,9 @@ public:
      * @return The gamepad at the specified index.
      */
     inline Gamepad* getGamepad(unsigned int index, bool preferPhysical = true) const;
+
+
+    inline HMD* getHMD() const;
 
     /**
      * Sets whether multi-sampling is to be enabled/disabled. Default is disabled.
