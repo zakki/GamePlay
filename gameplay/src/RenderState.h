@@ -23,6 +23,7 @@ class RenderState : public Ref
     friend class Technique;
     friend class Pass;
     friend class Model;
+    friend class Platform;
 
 public:
 

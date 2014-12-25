@@ -744,6 +744,9 @@
     <ClCompile Include="src\TileSet.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\HMD.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Plane.h">
@@ -1473,6 +1476,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\TileSet.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\HMD.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

@@ -7,11 +7,14 @@
 #include "SceneLoader.h"
 #include "ControlFactory.h"
 #include "Theme.h"
+#include "HMD.h"
 
 /** @script{ignore} */
 GLenum __gl_error_code = GL_NO_ERROR;
 /** @script{ignore} */
 ALenum __al_error_code = AL_NO_ERROR;
+
+extern gameplay::FrameBuffer *ovrRenderTarget[2];
 
 namespace gameplay
 {
@@ -134,6 +137,11 @@ bool Game::isVsync()
     return Platform::isVsync();
 }
 
+unsigned int Game::getCurrentEyeIndex() const
+{
+    return _currentEyeIndex;
+}
+
 int Game::run()
 {
     if (_state != UNINITIALIZED)
@@ -160,8 +168,8 @@ bool Game::startup()
         return false;
 
     setViewport(Rectangle(0.0f, 0.0f, (float)_width, (float)_height));
-    RenderState::initialize();
-    FrameBuffer::initialize();
+//    RenderState::initialize();
+//    FrameBuffer::initialize();
 
     _animationController = new AnimationController();
     _animationController->initialize();
@@ -409,12 +417,7 @@ void Game::frame()
         // Audio Rendering.
         _audioController->update(elapsedTime);
 
-        // Graphics Rendering.
-        render(elapsedTime);
-
-        // Run script render.
-        if (_scriptTarget)
-            _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), elapsedTime);
+        renderSceneAndScripts(elapsedTime);
 
         // Update FPS.
         ++_frameCount;
@@ -441,11 +444,45 @@ void Game::frame()
             _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, update), 0);
 
         // Graphics Rendering.
-        render(0);
+        renderSceneAndScripts(0);
+    }
+}
 
-        // Script render.
+void Game::renderSceneAndScripts(float elapsedTime)
+{
+	HMD* hmd = HMD::getHMD();
+
+    if (hmd)
+    {
+        for (int eyeIndex = 0; eyeIndex < 2; eyeIndex++)
+        {
+            _currentEyeIndex = eyeIndex;
+            FrameBuffer* previousFrameBuffer = ovrRenderTarget[eyeIndex]->bind();
+
+            setViewport(hmd->getViewport(eyeIndex));
+
+            clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+
+            // Graphics Rendering.
+            render(elapsedTime);
+
+            // Run script render.
+            if (_scriptTarget)
+                _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), elapsedTime);
+
+            previousFrameBuffer->bind();
+        }
+    }
+    else
+    {
+        clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+
+        // Graphics Rendering.
+        render(elapsedTime);
+
+        // Run script render.
         if (_scriptTarget)
-            _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), 0);
+            _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), elapsedTime);
     }
 }
 

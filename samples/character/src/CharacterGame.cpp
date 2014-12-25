@@ -62,6 +62,7 @@ void CharacterGame::initialize()
     _scene->visit(this, &CharacterGame::initializeScene);
 
     _gamepad = getGamepad(0);
+    _hmd = getHMD();
 }
 
 bool CharacterGame::initializeScene(Node* node)
@@ -375,6 +376,24 @@ void CharacterGame::render(float elapsedTime)
 {
     // Clear the color and depth buffers.
     clear(CLEAR_COLOR_DEPTH, Vector4(0.41f, 0.48f, 0.54f, 1.0f), 1.0f, 0);
+
+    if (_hmd)
+    {
+        Matrix prj;
+        _hmd->getProjection(&prj);
+        Vector3 pos;
+        _hmd->getHeadPosition(getCurrentEyeIndex(), &pos);
+        Matrix orientation;
+        _hmd->getHeadOrientation(getCurrentEyeIndex(), &orientation);
+        _scene->getActiveCamera()->setProjectionMatrix(prj);
+
+        Matrix m;
+        Matrix headPos;
+        headPos.setIdentity();
+        headPos.translate(pos);
+        Matrix::multiply(headPos, orientation, &m);
+        _scene->getActiveCamera()->setHeadMatrix(m);
+    }
 
     // Draw our scene, with separate passes for opaque and transparent objects.
     _scene->visit(this, &CharacterGame::drawScene, false);

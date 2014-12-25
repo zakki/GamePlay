@@ -106,6 +106,7 @@ void RacerGame::initialize()
     _brakingSound->setGain(0.5f);
 
     _gamepad = getGamepad(0);
+    _hmd = getHMD();
 }
 
 bool RacerGame::initializeScene(Node* node)
@@ -301,6 +302,24 @@ void RacerGame::render(float elapsedTime)
 {
     // Clear the color and depth buffers
     clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+
+    if (_hmd)
+    {
+        Matrix prj;
+        _hmd->getProjection(&prj);
+        Vector3 pos;
+        _hmd->getHeadPosition(getCurrentEyeIndex(), &pos);
+        Matrix orientation;
+        _hmd->getHeadOrientation(getCurrentEyeIndex(), &orientation);
+        _scene->getActiveCamera()->setProjectionMatrix(prj);
+
+        Matrix m;
+        Matrix headPos;
+        headPos.setIdentity();
+        headPos.translate(pos);
+        Matrix::multiply(headPos, orientation, &m);
+        _scene->getActiveCamera()->setHeadMatrix(m);
+    }
 
     // Visit all the nodes in the scene to build our render queues
     for (unsigned int i = 0; i < QUEUE_COUNT; ++i)
