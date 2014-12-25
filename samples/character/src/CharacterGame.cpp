@@ -371,10 +371,26 @@ void CharacterGame::update(float elapsedTime)
     }
 }
 
+namespace gameplay
+{
+extern Matrix ovrEyeProjection;
+extern Matrix ovrHeadOrientation;
+extern Vector3 ovrHeadPosition;
+}
+
 void CharacterGame::render(float elapsedTime)
 {
     // Clear the color and depth buffers.
     clear(CLEAR_COLOR_DEPTH, Vector4(0.41f, 0.48f, 0.54f, 1.0f), 1.0f, 0);
+    
+    _scene->getActiveCamera()->setProjectionMatrix(ovrEyeProjection);
+
+    Matrix m;
+    Matrix headPos;
+    headPos.setIdentity();
+    headPos.translate(ovrHeadPosition);
+    Matrix::multiply(headPos, ovrHeadOrientation, &m);
+    _scene->getActiveCamera()->setHeadMatrix(m);
 
     // Draw our scene, with separate passes for opaque and transparent objects.
     _scene->visit(this, &CharacterGame::drawScene, false);
