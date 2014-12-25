@@ -619,6 +619,7 @@ public:
      */
     bool launchURL(const char *url) const;
 
+    void renderSceneAndScripts(float elapsedTime);
 protected:
 
     /**

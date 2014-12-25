@@ -434,38 +434,7 @@ void Game::frame()
         // Audio Rendering.
         _audioController->update(elapsedTime);
 
-        ovrFrameTiming hmdFrameTiming = ovrHmd_BeginFrame(HMD, 0);
-        ovrPosef headPose[2];
-
-        ovrTrackingState hmdState;
-        ovrVector3f hmdToEyeViewOffset[2] = { __eyeRenderDesc[0].HmdToEyeViewOffset, __eyeRenderDesc[1].HmdToEyeViewOffset };
-        ovrHmd_GetEyePoses(HMD, 0, hmdToEyeViewOffset, headPose, &hmdState);
-
-        for (int eyeIndex = 0; eyeIndex < ovrEye_Count; eyeIndex++)
-        {
-            FrameBuffer* previousFrameBuffer = ovrRenderTarget[eyeIndex]->bind();
-            ovrEyeType eye = HMD->EyeRenderOrder[eyeIndex];
-
-            OVR::Matrix4f orientation(headPose[eye].Orientation);
-            ovrHeadOrientation = fromOvrMatrix(orientation);
-            ovrHeadPosition.set(headPose[eye].Position.x, headPose[eye].Position.y, headPose[eye].Position.z);
-
-            OVR::Matrix4f proj = ovrMatrix4f_Projection(__eyeRenderDesc[eye].Fov,
-                0.01f, 10000.0f, true);
-            ovrEyeProjection = fromOvrMatrix(proj);
-            setViewport(Rectangle(__eyeRenderSizes[eyeIndex].w, __eyeRenderSizes[eyeIndex].h));
-            clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
-
-            // Graphics Rendering.
-            render(elapsedTime);
-
-            // Run script render.
-            if (_scriptTarget)
-                _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), elapsedTime);
-
-            previousFrameBuffer->bind();
-        }
-        ovrHmd_EndFrame(HMD, headPose, __eyeTexture);
+        renderSceneAndScripts(elapsedTime);
 
         // Update FPS.
         ++_frameCount;
@@ -492,12 +461,44 @@ void Game::frame()
             _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, update), 0);
 
         // Graphics Rendering.
-        render(0);
-
-        // Script render.
-        if (_scriptTarget)
-            _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), 0);
+        renderSceneAndScripts(0);
     }
+}
+
+void Game::renderSceneAndScripts(float elapsedTime)
+{
+    ovrFrameTiming hmdFrameTiming = ovrHmd_BeginFrame(HMD, 0);
+    ovrPosef headPose[2];
+
+    ovrTrackingState hmdState;
+    ovrVector3f hmdToEyeViewOffset[2] = { __eyeRenderDesc[0].HmdToEyeViewOffset, __eyeRenderDesc[1].HmdToEyeViewOffset };
+    ovrHmd_GetEyePoses(HMD, 0, hmdToEyeViewOffset, headPose, &hmdState);
+
+    for (int eyeIndex = 0; eyeIndex < ovrEye_Count; eyeIndex++)
+    {
+        FrameBuffer* previousFrameBuffer = ovrRenderTarget[eyeIndex]->bind();
+        ovrEyeType eye = HMD->EyeRenderOrder[eyeIndex];
+
+        OVR::Matrix4f orientation(headPose[eye].Orientation);
+        ovrHeadOrientation = fromOvrMatrix(orientation);
+        ovrHeadPosition.set(headPose[eye].Position.x, headPose[eye].Position.y, headPose[eye].Position.z);
+
+        OVR::Matrix4f proj = ovrMatrix4f_Projection(__eyeRenderDesc[eye].Fov,
+            0.01f, 10000.0f, true);
+        ovrEyeProjection = fromOvrMatrix(proj);
+        setViewport(Rectangle(__eyeRenderSizes[eyeIndex].w, __eyeRenderSizes[eyeIndex].h));
+        clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+
+        // Graphics Rendering.
+        render(elapsedTime);
+
+        // Run script render.
+        if (_scriptTarget)
+            _scriptTarget->fireScriptEvent<void>(GP_GET_SCRIPT_EVENT(GameScriptTarget, render), elapsedTime);
+
+        previousFrameBuffer->bind();
+    }
+    ovrHmd_EndFrame(HMD, headPose, __eyeTexture);
 }
 
 void Game::renderOnce(const char* function)
