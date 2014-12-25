@@ -297,10 +297,26 @@ bool RacerGame::isUpset() const
     return _carVehicle->getNode()->getUpVector().y < 0.4f;
 }
 
+namespace gameplay
+{
+extern Matrix ovrEyeProjection;
+extern Matrix ovrHeadOrientation;
+extern Vector3 ovrHeadPosition;
+}
+
 void RacerGame::render(float elapsedTime)
 {
     // Clear the color and depth buffers
-    clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+    //clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+
+    _scene->getActiveCamera()->setProjectionMatrix(ovrEyeProjection);
+
+    Matrix m;
+    Matrix headPos;
+    headPos.setIdentity();
+    headPos.translate(ovrHeadPosition);
+    Matrix::multiply(headPos, ovrHeadOrientation, &m);
+    _scene->getActiveCamera()->setHeadMatrix(m);
 
     // Visit all the nodes in the scene to build our render queues
     for (unsigned int i = 0; i < QUEUE_COUNT; ++i)

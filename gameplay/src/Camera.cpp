@@ -234,6 +234,19 @@ void Camera::setNode(Node* node)
     }
 }
 
+void Camera::setHeadMatrix(const Matrix& matrix)
+{
+    _head = matrix;
+    _bits |= CAMERA_DIRTY_VIEW_PROJ | CAMERA_DIRTY_INV_VIEW_PROJ | CAMERA_DIRTY_BOUNDS;
+
+    cameraChanged();
+}
+
+const Matrix& Camera::getHeadMatrix() const
+{
+    return _head;
+}
+
 const Matrix& Camera::getViewMatrix() const
 {
     if (_bits & CAMERA_DIRTY_VIEW)
@@ -241,7 +254,10 @@ const Matrix& Camera::getViewMatrix() const
         if (_node)
         {
             // The view matrix is the inverse of our transform matrix.
-            _node->getWorldMatrix().invert(&_view);
+            //_node->getWorldMatrix().invert(&_view);
+            Matrix m;
+            Matrix::multiply(_node->getWorldMatrix(), getHeadMatrix(), &m);
+            m.invert(&_view);
         }
         else
         {

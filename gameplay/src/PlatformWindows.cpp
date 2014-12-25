@@ -14,6 +14,11 @@
 #ifdef GP_USE_GAMEPAD
 #include <XInput.h>
 #endif
+#include "OVR.h"
+#include "OVR_Kernel.h"
+#include "OVR_CAPI.h"
+#include "OVR_CAPI_GL.h"
+#include "OVR_Stereo.h"
 
 using gameplay::print;
 
@@ -37,6 +42,14 @@ static POINT __mouseCapturePoint = { 0, 0 };
 static bool __multiSampling = false;
 static bool __cursorVisible = true;
 static unsigned int __gamepadsConnected = 0;
+
+ovrHmd HMD;
+float __fovSideTanMax;
+OVR::Sizei __texSizes[2];
+OVR::Sizei __eyeRenderSizes[2];
+ovrEyeRenderDesc __eyeRenderDesc[2];
+ovrTexture __eyeTexture[2];
+gameplay::FrameBuffer *ovrRenderTarget[2];
 
 #ifdef GP_USE_GAMEPAD
 static const unsigned int XINPUT_BUTTON_COUNT = 14;
@@ -449,6 +462,13 @@ LRESULT CALLBACK __WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         if (wParam == VK_CAPITAL)
             capsOn = !capsOn;
+					
+		ovrHSWDisplayState hswDisplayState;
+		ovrHmd_GetHSWDisplayState(HMD, &hswDisplayState);
+		if (hswDisplayState.Displayed && ovrHmd_DismissHSWDisplay(HMD)) {
+			ovrHmd_DismissHSWDisplay(HMD);
+			//HSWDisplayCurrentlyDisplayed = false;
+		}
 
         gameplay::Platform::keyEventInternal(gameplay::Keyboard::KEY_PRESS, getKey(wParam, shiftDown ^ capsOn));
         break;
@@ -526,6 +546,11 @@ Platform::~Platform()
 {
     if (__hwnd)
     {
+		for (int i = 0; i < ovrEye_Count; i++) {
+			SAFE_DELETE(ovrRenderTarget[i]);
+		}
+		ovrHmd_Destroy(HMD);
+		ovr_Shutdown();
         DestroyWindow(__hwnd);
         __hwnd = 0;
     }
@@ -804,6 +829,19 @@ Platform* Platform::create(Game* game)
     // Get the application module handle.
     __hinstance = ::GetModuleHandle(NULL);
 
+	// Setup Oculus
+	ovr_Initialize();
+	HMD = ovrHmd_Create(0);
+	if (!HMD)
+	{
+		// If we didn't detect an Hmd, create a simulated one for debugging.
+		HMD = ovrHmd_CreateDebug(ovrHmd_DK2);
+		if (!HMD)
+		{   // Failed Hmd creation.
+//			return NULL;
+		}
+	}
+
     // Read window settings from config.
     WindowCreationParams params;
     params.fullscreen = false;
@@ -856,11 +894,27 @@ Platform* Platform::create(Game* game)
         }
     }
 
-    // If window size was not specified, set it to a default value
-    if (params.rect.right == 0)
-        params.rect.right = params.rect.left + DEFAULT_RESOLUTION_X;
-    if (params.rect.bottom == 0)
-        params.rect.bottom = params.rect.top + DEFAULT_RESOLUTION_Y;
+
+    if (HMD->HmdCaps & ovrHmdCap_ExtendDesktop)
+    {
+        params.rect.right = params.rect.left + HMD->Resolution.w;
+		params.rect.bottom = params.rect.top + HMD->Resolution.h;
+    }
+	else if (HMD)
+	{
+		if (params.rect.right == 0)
+			params.rect.right = params.rect.left + 1100;
+		if (params.rect.bottom == 0)
+			params.rect.bottom = params.rect.top + 618;
+	}
+	else
+	{
+		// If window size was not specified, set it to a default value
+		if (params.rect.right == 0)
+			params.rect.right = params.rect.left + DEFAULT_RESOLUTION_X;
+		if (params.rect.bottom == 0)
+			params.rect.bottom = params.rect.top + DEFAULT_RESOLUTION_Y;
+	}
     int width = params.rect.right - params.rect.left;
     int height = params.rect.bottom - params.rect.top;
 
@@ -958,6 +1012,71 @@ Platform* Platform::create(Game* game)
     }
 #endif
 
+    RenderState::initialize();
+    FrameBuffer::initialize();
+
+    __fovSideTanMax = OVR::FovPort::Max(HMD->DefaultEyeFov[0], HMD->DefaultEyeFov[1]).GetMaxSideTan();
+
+	// Configure OpenGL.
+	ovrGLConfig cfg;
+	cfg.OGL.Header.API = ovrRenderAPI_OpenGL;
+//	cfg.OGL.Header.BackBufferSize = OVR::Sizei(HMD->Resolution.w, HMD->Resolution.h);
+	cfg.OGL.Header.BackBufferSize = OVR::Sizei(width, height);
+	cfg.OGL.Header.Multisample = 1;
+	cfg.OGL.Window = __hwnd;
+	cfg.OGL.DC = __hdc;
+
+
+    ovrFovPort eyeFov[2];
+    eyeFov[0] = HMD->DefaultEyeFov[0];
+    eyeFov[1] = HMD->DefaultEyeFov[1];
+
+    // Most apps should use the default, but reducing Fov does reduce rendering cost.
+    eyeFov[0] = OVR::FovPort::Min(eyeFov[0], OVR::FovPort(__fovSideTanMax));
+    eyeFov[1] = OVR::FovPort::Min(eyeFov[1], OVR::FovPort(__fovSideTanMax));
+	unsigned distortionCaps = ovrDistortionCap_Chromatic;
+
+	ovrBool result = ovrHmd_ConfigureRendering(HMD, &cfg.Config, distortionCaps,
+		eyeFov, __eyeRenderDesc);
+
+	// Configure Stereo settings.
+    OVR::Sizei recommenedTex0Size;
+    OVR::Sizei recommenedTex1Size;
+    recommenedTex0Size = ovrHmd_GetFovTextureSize(HMD, ovrEye_Left, HMD->DefaultEyeFov[0], 1.0f);
+    recommenedTex1Size = ovrHmd_GetFovTextureSize(HMD, ovrEye_Right, HMD->DefaultEyeFov[1], 1.0f);
+
+	__texSizes[0] = ovrHmd_GetFovTextureSize(HMD, ovrEye_Left, eyeFov[0], 1.0f);
+	__texSizes[1] = ovrHmd_GetFovTextureSize(HMD, ovrEye_Right, eyeFov[1], 1.0f);
+
+	const int eyeRenderMultisample = 1;
+	//pRendertargetTexture = pRender->CreateTexture(Texture_RGBA | Texture_RenderTarget | eyeRenderMultisample, renderTargetSize.w, renderTargetSize.h, NULL);
+	for (int i = 0; i < ovrEye_Count; i++) {
+		ovrRenderTarget[i] = FrameBuffer::create("OVR", __texSizes[i].w, __texSizes[i].h);
+		DepthStencilTarget* dst = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, __texSizes[i].w, __texSizes[i].h);
+		ovrRenderTarget[i]->setDepthStencilTarget(dst);
+		dst->release();
+
+		// The actual RT size may be different due to HW limits.
+		__texSizes[i].w = ovrRenderTarget[0]->getWidth();
+		__texSizes[i].h = ovrRenderTarget[0]->getHeight();
+
+        __eyeRenderSizes[i] = OVR::Sizei::Min(__texSizes[i], recommenedTex0Size);
+		
+		ovrGLTextureData* tex = (ovrGLTextureData*)(__eyeTexture + i);
+		tex->Header.API = ovrRenderAPI_OpenGL;
+		tex->Header.TextureSize.w = ovrRenderTarget[i]->getWidth();
+		tex->Header.TextureSize.h = ovrRenderTarget[i]->getHeight();
+		tex->Header.RenderViewport = OVR::Recti(__eyeRenderSizes[i]);
+		tex->TexId = ovrRenderTarget[i]->getRenderTarget()->getTexture()->getHandle();
+	}
+
+    ovrHmd_ConfigureTracking(HMD, ovrTrackingCap_Orientation |
+        ovrTrackingCap_MagYawCorrection |
+        ovrTrackingCap_Position, 0);
+    ovrHmd_RecenterPose(HMD);
+
+	ovrHmd_AttachToWindow(HMD, __hwnd, NULL, NULL);
+
     return platform;
 
 error:
@@ -979,7 +1098,7 @@ int Platform::enterMessagePump()
     GP_ASSERT(__timeTicksPerMillis);
     __timeStart = queryTime.QuadPart / __timeTicksPerMillis;
 
-    SwapBuffers(__hdc);
+    //SwapBuffers(__hdc);
 
     if (_game->getState() != Game::RUNNING)
         _game->run();
@@ -1020,7 +1139,7 @@ int Platform::enterMessagePump()
             }
 #endif
             _game->frame();
-            SwapBuffers(__hdc);
+//            SwapBuffers(__hdc);
         }
 
         // If we are done, then exit.
@@ -1042,16 +1161,22 @@ bool Platform::canExit()
 
 unsigned int Platform::getDisplayWidth()
 {
+	return __texSizes[0].w;
+    /*
     static RECT rect;
     GetClientRect(__hwnd, &rect);
     return rect.right;
+    */
 }
 
 unsigned int Platform::getDisplayHeight()
 {
+	return __texSizes[0].h;
+    /*
     static RECT rect;
     GetClientRect(__hwnd, &rect);
     return rect.bottom;
+    */
 }
 
 double Platform::getAbsoluteTime()
