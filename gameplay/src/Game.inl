@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "Platform.h"
+#include "HMD.h"
 
 namespace gameplay
 {
@@ -144,6 +145,11 @@ inline unsigned int Game::getGamepadCount() const
 inline Gamepad* Game::getGamepad(unsigned int index, bool preferPhysical) const
 {
     return Gamepad::getGamepad(index, preferPhysical);
+}
+
+inline HMD* Game::getHMD() const
+{
+    return HMD::getHMD();
 }
 
 inline void Game::displayKeyboard(bool display)

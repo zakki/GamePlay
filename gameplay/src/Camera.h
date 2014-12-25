@@ -187,6 +187,9 @@ public:
      */
     Node* getNode() const;
 
+    void setHeadMatrix(const Matrix& matrix);
+    const Matrix& getHeadMatrix() const;
+
     /**
      * Gets the camera's view matrix.
      *
@@ -371,6 +374,7 @@ private:
     mutable Matrix _viewProjection;
     mutable Matrix _inverseView;
     mutable Matrix _inverseViewProjection;
+    mutable Matrix _head;
     mutable Frustum _bounds;
     mutable int _bits;
     Node* _node;

@@ -25,6 +25,7 @@ namespace gameplay
 class FrameBuffer : public Ref
 {
     friend class Game;
+    friend class Platform;
 
 public:
 

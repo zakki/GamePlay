@@ -55,6 +55,7 @@
     <ClCompile Include="src\gameplay-main-linux.cpp" />
     <ClCompile Include="src\gameplay-main-windows.cpp" />
     <ClCompile Include="src\HeightField.cpp" />
+    <ClCompile Include="src\HMD.cpp" />
     <ClCompile Include="src\Image.cpp" />
     <ClCompile Include="src\ImageControl.cpp" />
     <ClCompile Include="src\Joint.cpp" />
@@ -304,6 +305,7 @@
     <ClInclude Include="src\gameplay.h" />
     <ClInclude Include="src\Gesture.h" />
     <ClInclude Include="src\HeightField.h" />
+    <ClInclude Include="src\HMD.h" />
     <ClInclude Include="src\Image.h" />
     <ClInclude Include="src\ImageControl.h" />
     <ClInclude Include="src\Joint.h" />

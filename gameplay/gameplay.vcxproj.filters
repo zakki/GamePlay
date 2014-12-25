@@ -360,6 +360,9 @@
     <ClCompile Include="src\Drawable.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\HMD.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
     <ClCompile Include="src\lua\lua_AbsoluteLayout.cpp">
       <Filter>src\lua</Filter>
     </ClCompile>
@@ -1107,6 +1110,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\Drawable.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\HMD.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\lua\lua_AbsoluteLayout.h">

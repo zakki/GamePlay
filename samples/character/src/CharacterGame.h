@@ -2,6 +2,7 @@
 #define CHARACTERGAME_H_
 
 #include "gameplay.h"
+#include "HMD.h"
 using namespace gameplay;
 
 /**
@@ -111,6 +112,7 @@ private:
     bool* _buttonPressed;
     Vector2 _currentDirection;
     Gamepad* _gamepad;
+    HMD* _hmd;
 
 };
 
