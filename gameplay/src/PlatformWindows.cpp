@@ -547,7 +547,7 @@ Platform::~Platform()
     if (__hwnd)
     {
 		for (int i = 0; i < ovrEye_Count; i++) {
-			SAFE_DELETE(ovrRenderTarget[i]);
+			SAFE_RELEASE(ovrRenderTarget[i]);
 		}
 		ovrHmd_Destroy(HMD);
 		ovr_Shutdown();
