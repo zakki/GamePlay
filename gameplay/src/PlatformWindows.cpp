@@ -546,11 +546,17 @@ Platform::~Platform()
 {
     if (__hwnd)
     {
-		for (int i = 0; i < ovrEye_Count; i++) {
-			SAFE_RELEASE(ovrRenderTarget[i]);
-		}
-		ovrHmd_Destroy(HMD);
-		ovr_Shutdown();
+        for (int i = 0; i < ovrEye_Count; i++) {
+            SAFE_RELEASE(ovrRenderTarget[i]);
+        }
+        wglMakeCurrent(NULL, NULL);
+        if (__hrc)
+        {
+            wglDeleteContext(__hrc);
+            __hrc = NULL;
+        }
+        ovrHmd_Destroy(HMD);
+        ovr_Shutdown();
         DestroyWindow(__hwnd);
         __hwnd = 0;
     }
