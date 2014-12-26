@@ -237,7 +237,7 @@ void Camera::setNode(Node* node)
 void Camera::setHeadMatrix(const Matrix& matrix)
 {
     _head = matrix;
-    _bits |= CAMERA_DIRTY_VIEW_PROJ | CAMERA_DIRTY_INV_VIEW_PROJ | CAMERA_DIRTY_BOUNDS;
+    _bits |= CAMERA_DIRTY_VIEW | CAMERA_DIRTY_VIEW_PROJ | CAMERA_DIRTY_INV_VIEW | CAMERA_DIRTY_INV_VIEW_PROJ | CAMERA_DIRTY_BOUNDS;
 
     cameraChanged();
 }
