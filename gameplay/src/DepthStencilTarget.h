@@ -43,7 +43,7 @@ public:
      * @return A newly created DepthStencilTarget.
      * @script{create}
      */
-    static DepthStencilTarget* create(const char* id, Format format, unsigned int width, unsigned int height);
+    static DepthStencilTarget* create(const char* id, Format format, unsigned int width, unsigned int height, unsigned int samples = 1);
 
     /**
      * Get a named DepthStencilTarget from its ID.
@@ -113,6 +113,7 @@ private:
     unsigned int _width;
     unsigned int _height;
     bool _packed;
+    unsigned int _samples;
 };
 
 }

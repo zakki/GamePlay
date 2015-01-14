@@ -34,17 +34,21 @@ DepthStencilTarget::~DepthStencilTarget()
     }
 }
 
-DepthStencilTarget* DepthStencilTarget::create(const char* id, Format format, unsigned int width, unsigned int height)
+DepthStencilTarget* DepthStencilTarget::create(const char* id, Format format, unsigned int width, unsigned int height, unsigned int samples)
 {
     // Create the depth stencil target.
     DepthStencilTarget* depthStencilTarget = new DepthStencilTarget(id, format, width, height);
+    depthStencilTarget->_samples = samples;
 
     // Create a render buffer for this new depth+stencil target
     GL_ASSERT( glGenRenderbuffers(1, &depthStencilTarget->_depthBuffer) );
     GL_ASSERT( glBindRenderbuffer(GL_RENDERBUFFER, depthStencilTarget->_depthBuffer) );
 
     // First try to add storage for the most common standard GL_DEPTH24_STENCIL8 
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    if (samples > 1)
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);
+    else
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
 
     // Fall back to less common GLES2 extension combination for seperate depth24 + stencil8 or depth16 + stencil8
     __gl_error_code = glGetError();
@@ -54,24 +58,36 @@ DepthStencilTarget* DepthStencilTarget::create(const char* id, Format format, un
 
         if (strstr(extString, "GL_OES_packed_depth_stencil") != 0)
         {
-            GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8_OES, width, height) );
+            if (samples > 1)
+                GL_ASSERT( glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8_OES, width, height) );
+            else
+                GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8_OES, width, height) );
             depthStencilTarget->_packed = true;
         }
         else
         {
             if (strstr(extString, "GL_OES_depth24") != 0)
             {
-                GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height) );
+                if (samples > 1)
+                    GL_ASSERT( glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT24, width, height) );
+                else
+                    GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height) );
             }
             else
             {
-                GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height) );
+                if (samples > 1)
+                    GL_ASSERT( glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT16, width, height) );
+                else
+                    GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height) );
             }
             if (format == DepthStencilTarget::DEPTH_STENCIL)
             {
                 GL_ASSERT( glGenRenderbuffers(1, &depthStencilTarget->_stencilBuffer) );
                 GL_ASSERT( glBindRenderbuffer(GL_RENDERBUFFER, depthStencilTarget->_stencilBuffer) );
-                GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, width, height) );
+                if (samples > 1)
+                    GL_ASSERT( glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_STENCIL_INDEX8, width, height) );
+                else
+                    GL_ASSERT( glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, width, height) );
             }
         }
     }

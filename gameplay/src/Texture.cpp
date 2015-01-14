@@ -52,7 +52,8 @@ static TextureHandle __currentTextureId = 0;
 static Texture::Type __currentTextureType = Texture::TEXTURE_2D;
 
 Texture::Texture() : _handle(0), _format(UNKNOWN), _type((Texture::Type)0), _width(0), _height(0), _mipmapped(false), _cached(false), _compressed(false),
-    _wrapS(Texture::REPEAT), _wrapT(Texture::REPEAT), _wrapR(Texture::REPEAT), _minFilter(Texture::NEAREST_MIPMAP_LINEAR), _magFilter(Texture::LINEAR)
+    _wrapS(Texture::REPEAT), _wrapT(Texture::REPEAT), _wrapR(Texture::REPEAT), _minFilter(Texture::NEAREST_MIPMAP_LINEAR), _magFilter(Texture::LINEAR),
+    _samples(0)
 {
 }
 
@@ -161,9 +162,9 @@ Texture* Texture::create(Image* image, bool generateMipmaps)
     }
 }
 
-Texture* Texture::create(Format format, unsigned int width, unsigned int height, const unsigned char* data, bool generateMipmaps, Texture::Type type)
+Texture* Texture::create(Format format, unsigned int width, unsigned int height, const unsigned char* data, bool generateMipmaps, Texture::Type type, unsigned int samples)
 {
-    GP_ASSERT( type == Texture::TEXTURE_2D || type == Texture::TEXTURE_CUBE );
+    GP_ASSERT( type == Texture::TEXTURE_2D || type == Texture::TEXTURE_CUBE || type == Texture::TEXTURE_2D_MULTISAMPLE );
 
     GLenum target = (GLenum)type;
 
@@ -184,6 +185,11 @@ Texture* Texture::create(Format format, unsigned int width, unsigned int height,
     {
         // Texture 2D
         GL_ASSERT( glTexImage2D(GL_TEXTURE_2D, 0, (GLenum)format, width, height, 0, (GLenum)format, GL_UNSIGNED_BYTE, data) );
+    }
+    else if (type == Texture::TEXTURE_2D_MULTISAMPLE)
+    {
+        // Texture 2D
+        GL_ASSERT( glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, samples, (GLenum)format, width, height, GL_TRUE) );
     }
     else
     {
@@ -218,7 +224,8 @@ Texture* Texture::create(Format format, unsigned int width, unsigned int height,
 
     // Set initial minification filter based on whether or not mipmaping was enabled.
     Filter minFilter = generateMipmaps ? NEAREST_MIPMAP_LINEAR : LINEAR;
-    GL_ASSERT( glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter) );
+    if (type != Texture::TEXTURE_2D_MULTISAMPLE)
+        GL_ASSERT(glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter));
 
     Texture* texture = new Texture();
     texture->_handle = textureId;
@@ -227,6 +234,7 @@ Texture* Texture::create(Format format, unsigned int width, unsigned int height,
     texture->_width = width;
     texture->_height = height;
     texture->_minFilter = minFilter;
+    texture->_samples = samples;
     if (generateMipmaps)
     {
         texture->generateMipmaps();
