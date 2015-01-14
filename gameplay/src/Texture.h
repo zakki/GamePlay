@@ -57,6 +57,7 @@ public:
     enum Type
     {
         TEXTURE_2D = GL_TEXTURE_2D,
+        TEXTURE_2D_MULTISAMPLE = GL_TEXTURE_2D_MULTISAMPLE,
         TEXTURE_CUBE = GL_TEXTURE_CUBE_MAP
     };
 
@@ -204,7 +205,7 @@ public:
      * @return The new texture.
      * @script{create}
      */
-    static Texture* create(Format format, unsigned int width, unsigned int height, const unsigned char* data, bool generateMipmaps = false, Type type = TEXTURE_2D);
+    static Texture* create(Format format, unsigned int width, unsigned int height, const unsigned char* data, bool generateMipmaps = false, Type type = TEXTURE_2D, unsigned int samples = 0);
 
     /**
      * Creates a texture object to wrap the specified pre-created native texture handle.
@@ -340,6 +341,7 @@ private:
     Wrap _wrapR;
     Filter _minFilter;
     Filter _magFilter;
+    unsigned int _samples;
 };
 
 }
