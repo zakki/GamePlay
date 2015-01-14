@@ -1,17 +1,12 @@
 #include "Base.h"
 #include "HMD.h"
+#include "FrameBuffer.h"
 
 #ifdef WIN32
     #include <windows.h>
     #include <stdio.h>
     #include <direct.h>
 #endif
-
-#include "OVR.h"
-#include "OVR_Kernel.h"
-#include "OVR_CAPI.h"
-#include "OVR_CAPI_GL.h"
-#include "OVR_Stereo.h"
 
 namespace gameplay
 {
@@ -20,10 +15,14 @@ HMD* _hmd = NULL;
 
 HMD::HMD()
 {
+    for (int i = 0; i < 2; i++)
+        _frameBuffer[i] = nullptr;
 }
 
 HMD::~HMD()
 {
+    for (int i = 0; i < 2; i++)
+        SAFE_RELEASE(_frameBuffer[i]);
 }
 
 void HMD::setHMD(HMD* hmd)
@@ -61,6 +60,11 @@ void HMD::getHeadOrientation(unsigned int index, Matrix* outValue) const
     outValue->set(_headOrientation[index]);
 }
 
+FrameBuffer* HMD::getFrameBuffer(unsigned int index) const
+{
+    return _frameBuffer[index];
+}
+
 void HMD::setProjection(const Matrix& value)
 {
     _projection.set(value);
@@ -74,6 +78,13 @@ void HMD::setHeadPosition(unsigned int index, const Vector3& value)
 void HMD::setHeadOrientation(unsigned int index, const Matrix& value)
 {
     _headOrientation[index].set(value);
+}
+
+void HMD::setFrameBuffer(unsigned int index, FrameBuffer* value)
+{
+    SAFE_RELEASE(_frameBuffer[index]);
+    _frameBuffer[index] = value;
+    _frameBuffer[index]->addRef();
 }
 
 }

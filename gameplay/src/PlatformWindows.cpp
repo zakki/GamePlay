@@ -50,7 +50,6 @@ ovrHmd __HMD;
 float __fovSideTanMax;
 ovrEyeRenderDesc __eyeRenderDesc[2];
 ovrTexture __eyeTexture[2];
-gameplay::FrameBuffer *ovrRenderTarget[2];
 
 #ifdef GP_USE_GAMEPAD
 static const unsigned int XINPUT_BUTTON_COUNT = 14;
@@ -561,8 +560,11 @@ Platform::~Platform()
 {
     if (__hwnd)
     {
-        for (int i = 0; i < ovrEye_Count; i++) {
-            SAFE_RELEASE(ovrRenderTarget[i]);
+        HMD* hmd = HMD::getHMD();
+        if (hmd)
+        {
+            delete hmd;
+            HMD::setHMD(nullptr);
         }
         wglMakeCurrent(NULL, NULL);
         if (__hrc)
@@ -570,8 +572,11 @@ Platform::~Platform()
             wglDeleteContext(__hrc);
             __hrc = NULL;
         }
-        ovrHmd_Destroy(__HMD);
-        ovr_Shutdown();
+        if (__HMD)
+        {
+            ovrHmd_Destroy(__HMD);
+            ovr_Shutdown();
+        }
         DestroyWindow(__hwnd);
         __hwnd = 0;
     }
@@ -1048,7 +1053,7 @@ Platform* Platform::create(Game* game)
         cfg.OGL.Header.API = ovrRenderAPI_OpenGL;
         //	cfg.OGL.Header.BackBufferSize = OVR::Sizei(__HMD->Resolution.w, __HMD->Resolution.h);
         cfg.OGL.Header.BackBufferSize = OVR::Sizei(width, height);
-        cfg.OGL.Header.Multisample = 1;
+        cfg.OGL.Header.Multisample = params.samples;
         cfg.OGL.Window = __hwnd;
         cfg.OGL.DC = __hdc;
 
@@ -1073,26 +1078,27 @@ Platform* Platform::create(Game* game)
         recommenedTexSize[1] = ovrHmd_GetFovTextureSize(__HMD, ovrEye_Right, eyeFov[1], 1.0f);
 
         HMD* hmd = new HMD();
-        const int eyeRenderMultisample = 1;
         //pRendertargetTexture = pRender->CreateTexture(Texture_RGBA | Texture_RenderTarget | eyeRenderMultisample, renderTargetSize.w, renderTargetSize.h, NULL);
         for (unsigned int i = 0; i < ovrEye_Count; i++) {
-            ovrRenderTarget[i] = FrameBuffer::create("OVR", recommenedTexSize[i].w, recommenedTexSize[i].h);
+			std::string id = "OVR" + std::to_string(i);
+            FrameBuffer* ovrRenderTarget = FrameBuffer::create("OVR", recommenedTexSize[i].w, recommenedTexSize[i].h);
             DepthStencilTarget* dst = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, recommenedTexSize[i].w, recommenedTexSize[i].h);
-            ovrRenderTarget[i]->setDepthStencilTarget(dst);
+            ovrRenderTarget->setDepthStencilTarget(dst);
             dst->release();
+            hmd->setFrameBuffer(i, ovrRenderTarget);
 
             // The actual RT size may be different due to HW limits.
-            texSizes[i].w = ovrRenderTarget[i]->getWidth();
-            texSizes[i].h = ovrRenderTarget[i]->getHeight();
+            texSizes[i].w = ovrRenderTarget->getWidth();
+            texSizes[i].h = ovrRenderTarget->getHeight();
 
             eyeRenderSizes[i] = OVR::Sizei::Min(texSizes[i], recommenedTexSize[i]);
 
             ovrGLTextureData* tex = (ovrGLTextureData*)(__eyeTexture + i);
             tex->Header.API = ovrRenderAPI_OpenGL;
-            tex->Header.TextureSize.w = ovrRenderTarget[i]->getWidth();
-            tex->Header.TextureSize.h = ovrRenderTarget[i]->getHeight();
+            tex->Header.TextureSize.w = ovrRenderTarget->getWidth();
+            tex->Header.TextureSize.h = ovrRenderTarget->getHeight();
             tex->Header.RenderViewport = OVR::Recti(eyeRenderSizes[i]);
-            tex->TexId = ovrRenderTarget[i]->getRenderTarget()->getTexture()->getHandle();
+            tex->TexId = ovrRenderTarget->getRenderTarget()->getTexture()->getHandle();
 
             hmd->setViewport(i, Rectangle(eyeRenderSizes[i].w, eyeRenderSizes[i].h));
         }
@@ -1184,9 +1190,9 @@ int Platform::enterMessagePump()
                     ovrEyeType eye = __HMD->EyeRenderOrder[eyeIndex];
 
                     OVR::Matrix4f orientation(headPose[eye].Orientation);
-                    hmd->setHeadOrientation(eyeIndex, fromOvrMatrix(orientation));
+                    hmd->setHeadOrientation(eye, fromOvrMatrix(orientation));
                     Vector3 headPosition(headPose[eye].Position.x, headPose[eye].Position.y, headPose[eye].Position.z);
-                    hmd->setHeadPosition(eyeIndex, headPosition);
+                    hmd->setHeadPosition(eye, headPosition);
 
                     OVR::Matrix4f proj(ovrMatrix4f_Projection(__eyeRenderDesc[eye].Fov,
                         0.01f, 10000.0f, true));
