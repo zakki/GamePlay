@@ -162,6 +162,13 @@ public:
     FrameBuffer* bind();
 
     /**
+     * Returns the FrameBuffer handle.
+     *
+     * @return The FrameBuffer handle.
+     */
+    FrameBufferHandle getHandle() const;
+
+    /**
      * Records a screenshot of what is stored on the current FrameBuffer.
      *
      * @param format The format the Image should be in.

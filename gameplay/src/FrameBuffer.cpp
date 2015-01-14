@@ -155,13 +155,13 @@ unsigned int FrameBuffer::getMaxRenderTargets()
 
 void FrameBuffer::setRenderTarget(RenderTarget* target, unsigned int index)
 {
-    GP_ASSERT(!target || (target->getTexture() && target->getTexture()->getType() == Texture::TEXTURE_2D));
+    GP_ASSERT(!target || (target->getTexture() && (target->getTexture()->getType() == Texture::TEXTURE_2D || target->getTexture()->getType() == Texture::TEXTURE_2D_MULTISAMPLE)));
 
     // No change
     if (_renderTargets[index] == target)
         return;
 
-    setRenderTarget(target, index, GL_TEXTURE_2D);
+    setRenderTarget(target, index, target->getTexture()->getType() == Texture::TEXTURE_2D ? GL_TEXTURE_2D : GL_TEXTURE_2D_MULTISAMPLE);
 }
 
 void FrameBuffer::setRenderTarget(RenderTarget* target, Texture::CubeFace face, unsigned int index)
@@ -282,6 +282,11 @@ FrameBuffer* FrameBuffer::bind()
     return previousFrameBuffer;
 }
 
+FrameBufferHandle FrameBuffer::getHandle() const
+{
+    return _handle;
+}
+
 void FrameBuffer::getScreenshot(Image* image)
 {
     GP_ASSERT( image );
@@ -289,10 +294,10 @@ void FrameBuffer::getScreenshot(Image* image)
     unsigned int width = _currentFrameBuffer->getWidth();
     unsigned int height = _currentFrameBuffer->getHeight();
 
-	if (image->getWidth() == width && image->getHeight() == height) {
-		GLenum format = image->getFormat() == Image::RGB ? GL_RGB : GL_RGBA;
+    if (image->getWidth() == width && image->getHeight() == height) {
+        GLenum format = image->getFormat() == Image::RGB ? GL_RGB : GL_RGBA;
         GL_ASSERT( glReadPixels(0, 0, width, height, format, GL_UNSIGNED_BYTE, image->getData()) );
-	}
+    }
 }
 
 Image* FrameBuffer::createScreenshot(Image::Format format)
