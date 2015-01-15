@@ -7,6 +7,7 @@
 
 #define FRAMEBUFFER_WIDTH 1024
 #define FRAMEBUFFER_HEIGHT 1024
+#define MULTISAMPLE 4
 
 Model* PostProcessSample::_quadModel = NULL;
 Material* PostProcessSample::_compositorMaterial = NULL;
@@ -73,7 +74,7 @@ void PostProcessSample::Compositor::blit(const Rectangle& dst)
 }
 
 PostProcessSample::PostProcessSample()
-    : _font(NULL), _scene(NULL), _modelNode(NULL), _frameBuffer(NULL), _compositorIndex(0)
+    : _font(NULL), _scene(NULL), _modelNode(NULL), _frameBuffer(NULL), _msaaBuffer(NULL), _compositorIndex(0)
 {
 }
 
@@ -100,6 +101,17 @@ void PostProcessSample::initialize()
     DepthStencilTarget* dst = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT);
     _frameBuffer->setDepthStencilTarget(dst);
     SAFE_RELEASE(dst);
+
+    // Create frame buffer for MSAA
+    _msaaBuffer = FrameBuffer::create("PostProcessSampleMSAA");
+    Texture* texture = Texture::create(Texture::RGBA, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, NULL, false, Texture::Type::TEXTURE_2D_MULTISAMPLE, MULTISAMPLE);
+    RenderTarget* renderTarget = RenderTarget::create("PostProcessSampleMSAA", texture);
+    _msaaBuffer->setRenderTarget(renderTarget);
+    DepthStencilTarget* dstmsaa = DepthStencilTarget::create("PostProcessSampleMSAA", DepthStencilTarget::DEPTH_STENCIL, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, MULTISAMPLE);
+    _msaaBuffer->setDepthStencilTarget(dstmsaa);
+    SAFE_RELEASE(texture);
+    SAFE_RELEASE(renderTarget);
+    SAFE_RELEASE(dstmsaa);
 
     // Create our compositors that all output to the default framebuffer.
     Compositor* compositor = NULL;
@@ -145,6 +157,7 @@ void PostProcessSample::finalize()
     _compositors.clear();
     SAFE_RELEASE(_quadModel);
     SAFE_RELEASE(_frameBuffer);
+    SAFE_RELEASE(_msaaBuffer);
 }
 
 void PostProcessSample::update(float elapsedTime)
@@ -170,9 +183,24 @@ void PostProcessSample::render(float elapsedTime)
     
     // Draw into the framebuffer
     Game::getInstance()->setViewport(Rectangle(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT));
-    FrameBuffer* previousFrameBuffer = _frameBuffer->bind();
-    clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
+    FrameBuffer* previousFrameBuffer = _msaaBuffer->bind();
+    clear(CLEAR_COLOR_DEPTH, Vector4(1, 1, 1, 0), 1.0f, 0);
     _scene->visit(this, &PostProcessSample::drawScene);
+
+    // Resolve MSAA. (XXX: move to FrameBuffer?
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, _frameBuffer->getHandle());
+    GLenum drawFboStatus = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
+    if (drawFboStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        GP_ERROR("Framebuffer status incomplete: 0x%x", drawFboStatus);
+    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, _msaaBuffer->getHandle());
+    GLenum readFboStatus = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
+    if (readFboStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        GP_ERROR("Framebuffer status incomplete: 0x%x", readFboStatus);
+    }
+    glBlitFramebuffer(0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 
     // Bind the current compositor
     Game::getInstance()->setViewport(defaultViewport);

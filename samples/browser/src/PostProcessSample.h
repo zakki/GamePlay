@@ -84,6 +84,7 @@ private:
     Scene* _scene;
     Node* _modelNode;
     FrameBuffer* _frameBuffer;
+    FrameBuffer* _msaaBuffer;
     unsigned int _compositorIndex;
     std::vector<Compositor*> _compositors;
     static  Model* _quadModel;
