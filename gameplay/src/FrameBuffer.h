@@ -169,6 +169,11 @@ public:
     FrameBufferHandle getHandle() const;
 
     /**
+     * Resolve MSAA
+     */
+    void resolveMSAA(FrameBuffer* target);
+
+    /**
      * Records a screenshot of what is stored on the current FrameBuffer.
      *
      * @param format The format the Image should be in.
