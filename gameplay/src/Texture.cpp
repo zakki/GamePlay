@@ -2,6 +2,7 @@
 #include "Image.h"
 #include "Texture.h"
 #include "FileSystem.h"
+#include "stb_image.h"
 
 // PVRTC (GL_IMG_texture_compression_pvrtc) : Imagination based gpus
 #ifndef GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG
@@ -129,6 +130,22 @@ Texture* Texture::create(const char* path, bool generateMipmaps, bool useCache)
                 texture = createCompressedDDS(path);
             }
             break;
+        }
+    }
+    if (!texture)
+    {
+        // Fall back to stb loader
+        int x, y, n;
+        unsigned char* data = stbi_load(path, &x, &y, &n, 0);
+        if (data && n < 3)
+        {
+            stbi_image_free(data);
+            data = stbi_load(path, &x, &y, &n, 3);
+        }
+        if (data)
+        {
+            texture = create(n == 4 ? Format::RGBA : Format::RGB, x, y, data, generateMipmaps);
+            stbi_image_free(data);
         }
     }
 
