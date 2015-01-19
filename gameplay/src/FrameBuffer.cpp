@@ -287,6 +287,27 @@ FrameBufferHandle FrameBuffer::getHandle() const
     return _handle;
 }
 
+void FrameBuffer::resolveMSAA(FrameBuffer* target)
+{
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target->getHandle());
+    GLenum drawFboStatus = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
+    if (drawFboStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        GP_ERROR("Framebuffer status incomplete: 0x%x", drawFboStatus);
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, getHandle());
+    GLenum readFboStatus = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
+    if (readFboStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        GP_ERROR("Framebuffer status incomplete: 0x%x", readFboStatus);
+    }
+
+    int width = target->getWidth();
+    int height = target->getHeight();
+    glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+}
+
 void FrameBuffer::getScreenshot(Image* image)
 {
     GP_ASSERT( image );
