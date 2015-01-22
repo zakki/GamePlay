@@ -113,6 +113,34 @@ void RacerGame::initialize()
 
     _gamepad = getGamepad(0);
     _hmd = getHMD();
+    if (_hmd)
+    {
+        unsigned int samples = 1;
+        Properties* config = getConfig()->getNamespace("window", true);
+        if (config)
+        {
+            samples = config->getInt("samples");
+        }
+        for (int i = 0; i < 2; i++)
+        {
+            if (samples > 1)
+            {
+                unsigned int width = _hmd->getViewport(i).width;
+                unsigned int height = _hmd->getViewport(i).height;
+                FrameBuffer* multisample = FrameBuffer::create("HMD MSAA", width, height, samples);
+                DepthStencilTarget* dstm = DepthStencilTarget::create("PostProcessSample", DepthStencilTarget::DEPTH_STENCIL, width, height, samples);
+                multisample->setDepthStencilTarget(dstm);
+                dstm->release();
+
+                _multisampleTarget[i] = multisample;
+            }
+            else
+            {
+                _multisampleTarget[i] = NULL;
+            }
+        }
+
+    }
 }
 
 bool RacerGame::initializeScene(Node* node)
@@ -307,11 +335,16 @@ bool RacerGame::isUpset() const
 void RacerGame::render(float elapsedTime)
 {
     FrameBuffer* previousFrameBuffer = NULL;
+    FrameBuffer* targetBuffer = NULL;
+    int eyeIndex = getCurrentEyeIndex();
 
     if (_hmd)
     {
-        FrameBuffer* targetBuffer = _hmd->getFrameBuffer(getCurrentEyeIndex());
-        previousFrameBuffer = targetBuffer->bind();
+        targetBuffer = _hmd->getFrameBuffer(eyeIndex);
+        if (_multisampleTarget[eyeIndex])
+            previousFrameBuffer = _multisampleTarget[eyeIndex]->bind();
+        else
+            previousFrameBuffer = targetBuffer->bind();
     }
 
     // Clear the color and depth buffers
@@ -322,9 +355,9 @@ void RacerGame::render(float elapsedTime)
         Matrix prj;
         _hmd->getProjection(&prj);
         Vector3 pos;
-        _hmd->getHeadPosition(getCurrentEyeIndex(), &pos);
+        _hmd->getHeadPosition(eyeIndex, &pos);
         Matrix orientation;
-        _hmd->getHeadOrientation(getCurrentEyeIndex(), &orientation);
+        _hmd->getHeadOrientation(eyeIndex, &orientation);
         _scene->getActiveCamera()->setProjectionMatrix(prj);
 
         Matrix m;
@@ -373,6 +406,11 @@ void RacerGame::render(float elapsedTime)
 
     if (_hmd)
     {
+        // MSAA
+        if (_multisampleTarget[eyeIndex])
+        {
+            _multisampleTarget[eyeIndex]->resolveMSAA(targetBuffer);
+        }
         previousFrameBuffer->bind();
     }
 }

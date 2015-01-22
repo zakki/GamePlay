@@ -115,6 +115,7 @@ private:
      */
     bool isUpset() const;
 
+    FrameBuffer* _multisampleTarget[2];
     Scene* _scene;
     Font* _font;
     Form* _menu;
