@@ -1,5 +1,11 @@
 #include "RacerGame.h"
 
+#ifdef WIN32
+#pragma comment(lib,"libovr64d.lib")
+#pragma comment(lib,"winmm.lib")
+#pragma comment(lib,"ws2_32.lib")
+#endif
+
 // Render queue indexes (in order of drawing).
 enum RenderQueue
 {
@@ -300,6 +306,14 @@ bool RacerGame::isUpset() const
 
 void RacerGame::render(float elapsedTime)
 {
+    FrameBuffer* previousFrameBuffer = NULL;
+
+    if (_hmd)
+    {
+        FrameBuffer* targetBuffer = _hmd->getFrameBuffer(getCurrentEyeIndex());
+        previousFrameBuffer = targetBuffer->bind();
+    }
+
     // Clear the color and depth buffers
     clear(CLEAR_COLOR_DEPTH, Vector4::zero(), 1.0f, 0);
 
@@ -356,6 +370,11 @@ void RacerGame::render(float elapsedTime)
     sprintf(kph, "%d [km/h]", carSpeed);
     _font->drawText(kph, getWidth() / 2 - 50, getHeight() - 60, Vector4(1,1,1,1), 40);
     _font->finish();
+
+    if (_hmd)
+    {
+        previousFrameBuffer->bind();
+    }
 }
 
 bool RacerGame::buildRenderQueues(Node* node)
