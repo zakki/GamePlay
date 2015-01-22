@@ -23,10 +23,10 @@ RenderTarget::~RenderTarget()
     }
 }
 
-RenderTarget* RenderTarget::create(const char* id, unsigned int width, unsigned int height)
+RenderTarget* RenderTarget::create(const char* id, unsigned int width, unsigned int height, unsigned int samples)
 {
     // Create a new texture with the given width.
-    Texture* texture = Texture::create(Texture::RGBA, width, height, NULL, false);
+    Texture* texture = Texture::create(Texture::RGBA, width, height, NULL, false, samples > 1 ? Texture::TEXTURE_2D_MULTISAMPLE : Texture::TEXTURE_2D, samples);
     if (texture == NULL)
     {
         GP_ERROR("Failed to create texture for render target.");
