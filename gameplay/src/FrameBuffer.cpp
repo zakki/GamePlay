@@ -76,13 +76,13 @@ FrameBuffer* FrameBuffer::create(const char* id)
     return create(id, 0, 0);
 }
 
-FrameBuffer* FrameBuffer::create(const char* id, unsigned int width, unsigned int height)
+FrameBuffer* FrameBuffer::create(const char* id, unsigned int width, unsigned int height, unsigned int samples)
 {
     RenderTarget* renderTarget = NULL;
     if (width > 0 && height > 0)
     {
         // Create a default RenderTarget with same ID.
-        renderTarget = RenderTarget::create(id, width, height);
+        renderTarget = RenderTarget::create(id, width, height, samples);
         if (renderTarget == NULL)
         {
             GP_ERROR("Failed to create render target for frame buffer.");

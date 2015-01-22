@@ -29,7 +29,7 @@ public:
      * @return A newly created RenderTarget.
      * @script{create}
      */
-    static RenderTarget* create(const char* id, unsigned int width, unsigned int height);
+    static RenderTarget* create(const char* id, unsigned int width, unsigned int height, unsigned int samples = 1);
 
     /**
      * Create a RenderTarget from the given Texture and add it to the list of

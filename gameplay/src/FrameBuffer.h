@@ -59,7 +59,7 @@ public:
      * @return A newly created FrameBuffer.
      * @script{create}
      */
-    static FrameBuffer* create(const char* id, unsigned int width, unsigned int height);
+    static FrameBuffer* create(const char* id, unsigned int width, unsigned int height, unsigned int samples = 1);
 
     /**
      * Get a named FrameBuffer from its ID.
