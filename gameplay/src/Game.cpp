@@ -337,7 +337,7 @@ void Game::exit()
 	// release them nicely. For large games, shutdown can end up taking long time,
     // so we'll just call ::exit(0) to force an instant shutdown.
 
-#ifdef GP_USE_MEM_LEAK_DETECTION
+#if defined(GP_USE_MEM_LEAK_DETECTION) || 1
 
     // Schedule a call to shutdown rather than calling it right away.
 	// This handles the case of shutting down the script system from
