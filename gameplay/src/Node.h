@@ -607,6 +607,30 @@ public:
      */
     Node* clone() const;
 
+    template <class T>
+    void visit(T visitFunc)
+    {
+        // Invoke the visit method for this node.
+        if (!visitFunc(this))
+            return;
+
+        // If this node has a model with a mesh skin, visit the joint hierarchy within it
+        // since we don't add joint hierarchies directly to the scene. If joints are never
+        // visited, it's possible that nodes embedded within the joint hierarchy that contain
+        // models will never get visited (and therefore never get drawn).
+        Model* model = dynamic_cast<Model*>(getDrawable());
+        if (model && model->_skin && model->_skin->_rootNode)
+        {
+            model->_skin->_rootNode->visit(visitFunc);
+        }
+
+        // Recurse for all children.
+        for (Node* child = getFirstChild(); child != NULL; child = child->getNextSibling())
+        {
+            child->visit(visitFunc);
+        }
+    }
+
 protected:
 
     /**
