@@ -113,7 +113,7 @@ Material* Material::create(Effect* effect)
     return material;
 }
 
-Material* Material::create(const char* vshPath, const char* fshPath, const char* defines)
+Material* Material::create(const char* vshPath, const char* fshPath, const char* defines, const char* version)
 {
     GP_ASSERT(vshPath);
     GP_ASSERT(fshPath);
@@ -125,9 +125,9 @@ Material* Material::create(const char* vshPath, const char* fshPath, const char*
     material->_techniques.push_back(technique);
 
     Pass* pass = new Pass(NULL, technique);
-    if (!pass->initialize(vshPath, fshPath, defines))
+    if (!pass->initialize(vshPath, fshPath, defines, version))
     {
-        GP_WARN("Failed to create pass for material: vertexShader = %s, fragmentShader = %s, defines = %s", vshPath, fshPath, defines ? defines : "");
+        GP_WARN("Failed to create pass for material: vertexShader = %s, fragmentShader = %s, defines = %s, version = %s", vshPath, fshPath, defines ? defines : "", version ? version : "");
         SAFE_RELEASE(pass);
         SAFE_RELEASE(material);
         return NULL;
@@ -254,6 +254,7 @@ bool Material::loadPass(Technique* technique, Properties* passProperties, PassCa
     const char* fragmentShaderPath = passProperties->getString("fragmentShader");
     GP_ASSERT(fragmentShaderPath);
     const char* passDefines = passProperties->getString("defines");
+    const char* passVersion = passProperties->getString("version");
 
     // Create the pass
     Pass* pass = new Pass(passProperties->getId(), technique);
@@ -275,7 +276,7 @@ bool Material::loadPass(Technique* technique, Properties* passProperties, PassCa
     }
 
     // Initialize/compile the effect with the full set of defines
-    if (!pass->initialize(vertexShaderPath, fragmentShaderPath, allDefines.c_str()))
+    if (!pass->initialize(vertexShaderPath, fragmentShaderPath, allDefines.c_str(), passVersion))
     {
         GP_WARN("Failed to create pass for technique.");
         SAFE_RELEASE(pass);

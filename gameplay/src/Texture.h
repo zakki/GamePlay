@@ -143,6 +143,18 @@ public:
          */
         void bind();
 
+        /**
+         * Gets the bindless mode
+         */
+        bool isBindless() const {
+            return _bindless;
+        }
+
+        BindlessTextureHandle getHandle() const {
+            return _bindlessHandle;
+        }
+
+        void convertBindless();
     private:
 
         /**
@@ -161,6 +173,8 @@ public:
         Wrap _wrapR;
         Filter _minFilter;
         Filter _magFilter;
+        bool _bindless;
+        BindlessTextureHandle _bindlessHandle;
     };
 
     /**
@@ -175,7 +189,7 @@ public:
      * @return The new texture, or NULL if the texture could not be loaded/created.
      * @script{create}
      */
-    static Texture* create(const char* path, bool generateMipmaps = false);
+    static Texture* create(const char* path, bool generateMipmaps = false, bool useCache = true);
 
     /**
      * Creates a texture from the given image.

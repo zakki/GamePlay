@@ -94,7 +94,7 @@ public:
      *
      * @return The newly created and bound Material, or NULL if the Material could not be created.
      */
-    Material* setMaterial(const char* vshPath, const char* fshPath, const char* defines = NULL, int partIndex = -1);
+    Material* setMaterial(const char* vshPath, const char* fshPath, const char* defines = NULL, int partIndex = -1, const char* version = NULL);
 
     /**
      * Sets a material to be used for drawing this Model.

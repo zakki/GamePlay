@@ -278,6 +278,8 @@ typedef GLuint TextureHandle;
 typedef GLuint FrameBufferHandle;
 /** Render buffer handle. */
 typedef GLuint RenderBufferHandle;
+/** Texture handle. */
+typedef GLuint64 BindlessTextureHandle;
 
 /** Gamepad handle */
 #ifdef __ANDROID__

@@ -76,11 +76,12 @@ Texture::~Texture()
     }
 }
 
-Texture* Texture::create(const char* path, bool generateMipmaps)
+Texture* Texture::create(const char* path, bool generateMipmaps, bool useCache)
 {
     GP_ASSERT( path );
 
     // Search texture cache first.
+    if (useCache)
     for (size_t i = 0, count = __textureCache.size(); i < count; ++i)
     {
         Texture* t = __textureCache[i];
@@ -1145,7 +1146,7 @@ bool Texture::isCompressed() const
 }
 
 Texture::Sampler::Sampler(Texture* texture)
-    : _texture(texture), _wrapS(Texture::REPEAT), _wrapT(Texture::REPEAT), _wrapR(Texture::REPEAT)
+    : _texture(texture), _wrapS(Texture::REPEAT), _wrapT(Texture::REPEAT), _wrapR(Texture::REPEAT), _bindless(false)
 {
     GP_ASSERT( texture );
     _minFilter = texture->_minFilter;
@@ -1233,6 +1234,21 @@ void Texture::Sampler::bind()
             GL_ASSERT( glTexParameteri(target, GL_TEXTURE_WRAP_R, (GLenum)_wrapR) );
     }
 #endif
+}
+
+void Texture::Sampler::convertBindless()
+{
+    _bindless = true;
+
+    //glActiveTexture(GL_TEXTURE0);
+    bind();
+    GL_ASSERT(_bindlessHandle = glGetTextureHandleARB(_texture->_handle));
+    GL_ASSERT(glMakeTextureHandleResidentARB(_bindlessHandle));
+    /*
+    GL_ASSERT( glBindTexture(_texture->_type, 0) );
+    __currentTextureId = 0;
+    __currentTextureType = texture->_type;
+    */
 }
 
 }

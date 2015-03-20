@@ -102,7 +102,7 @@ public:
      * @return A new Material.
      * @script{create}
      */
-    static Material* create(const char* vshPath, const char* fshPath, const char* defines = NULL);
+    static Material* create(const char* vshPath, const char* fshPath, const char* defines = NULL, const char* version = NULL);
 
     /**
      * Returns the number of techniques in the material.

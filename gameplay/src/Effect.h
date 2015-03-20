@@ -36,7 +36,7 @@ public:
      * 
      * @return The created effect.
      */
-    static Effect* createFromFile(const char* vshPath, const char* fshPath, const char* defines = NULL);
+    static Effect* createFromFile(const char* vshPath, const char* fshPath, const char* defines = NULL, const char* version = NULL);
 
     /**
      * Creates an effect from the given vertex and fragment shader source code.
@@ -47,7 +47,7 @@ public:
      * 
      * @return The created effect.
      */
-    static Effect* createFromSource(const char* vshSource, const char* fshSource, const char* defines = NULL);
+    static Effect* createFromSource(const char* vshSource, const char* fshSource, const char* defines = NULL, const char* version = NULL);
 
     /**
      * Returns the unique string identifier for the effect, which is a concatenation of
@@ -239,7 +239,7 @@ private:
      */
     Effect& operator=(const Effect&);
 
-    static Effect* createFromSource(const char* vshPath, const char* vshSource, const char* fshPath, const char* fshSource, const char* defines = NULL);
+    static Effect* createFromSource(const char* vshPath, const char* vshSource, const char* fshPath, const char* fshSource, const char* defines = NULL, const char* version = NULL);
 
     GLuint _program;
     std::string _id;

@@ -88,7 +88,7 @@ private:
     /**
      * Creates a new pass for the given shaders.
      */
-    bool initialize(const char* vshPath, const char* fshPath, const char* defines);
+    bool initialize(const char* vshPath, const char* fshPath, const char* defines, const char* version);
 
     /**
      * Hidden copy assignment operator.

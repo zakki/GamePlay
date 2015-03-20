@@ -41,7 +41,7 @@ Effect::~Effect()
     }
 }
 
-Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const char* defines)
+Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const char* defines, const char* version)
 {
     GP_ASSERT(vshPath);
     GP_ASSERT(fshPath);
@@ -79,7 +79,7 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
         return NULL;
     }
 
-    Effect* effect = createFromSource(vshPath, vshSource, fshPath, fshSource, defines);
+    Effect* effect = createFromSource(vshPath, vshSource, fshPath, fshSource, defines, version);
     
     SAFE_DELETE_ARRAY(vshSource);
     SAFE_DELETE_ARRAY(fshSource);
@@ -98,9 +98,9 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
     return effect;
 }
 
-Effect* Effect::createFromSource(const char* vshSource, const char* fshSource, const char* defines)
+Effect* Effect::createFromSource(const char* vshSource, const char* fshSource, const char* defines, const char* version)
 {
-    return createFromSource(NULL, vshSource, NULL, fshSource, defines);
+    return createFromSource(NULL, vshSource, NULL, fshSource, defines, version);
 }
 
 static void replaceDefines(const char* defines, std::string& out)
@@ -226,12 +226,12 @@ static void writeShaderToErrorFile(const char* filePath, const char* source)
     }
 }
 
-Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, const char* fshPath, const char* fshSource, const char* defines)
+Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, const char* fshPath, const char* fshSource, const char* defines, const char* version)
 {
     GP_ASSERT(vshSource);
     GP_ASSERT(fshSource);
-
-    const unsigned int SHADER_SOURCE_LENGTH = 3;
+    
+    const unsigned int SHADER_SOURCE_LENGTH = 4;
     const GLchar* shaderSource[SHADER_SOURCE_LENGTH];
     char* infoLog = NULL;
     GLuint vertexShader;
@@ -243,9 +243,9 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
     // Replace all comma separated definitions with #define prefix and \n suffix
     std::string definesStr = "";
     replaceDefines(defines, definesStr);
-    
-    shaderSource[0] = definesStr.c_str();
-    shaderSource[1] = "\n";
+    shaderSource[0] = version ? version : "";
+    shaderSource[1] = definesStr.c_str();
+    shaderSource[2] = "\n";
     std::string vshSourceStr = "";
     if (vshPath)
     {
@@ -254,7 +254,7 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
         if (vshSource && strlen(vshSource) != 0)
             vshSourceStr += "\n";
     }
-    shaderSource[2] = vshPath ? vshSourceStr.c_str() :  vshSource;
+    shaderSource[3] = vshPath ? vshSourceStr.c_str() :  vshSource;
     GL_ASSERT( vertexShader = glCreateShader(GL_VERTEX_SHADER) );
     GL_ASSERT( glShaderSource(vertexShader, SHADER_SOURCE_LENGTH, shaderSource, NULL) );
     GL_ASSERT( glCompileShader(vertexShader) );
@@ -275,7 +275,7 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
 
         // Write out the expanded shader file.
         if (vshPath)
-            writeShaderToErrorFile(vshPath, shaderSource[2]);
+            writeShaderToErrorFile(vshPath, shaderSource[3]);
 
         GP_ERROR("Compile failed for vertex shader '%s' with error '%s'.", vshPath == NULL ? vshSource : vshPath, infoLog == NULL ? "" : infoLog);
         SAFE_DELETE_ARRAY(infoLog);
@@ -295,7 +295,7 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
         if (fshSource && strlen(fshSource) != 0)
             fshSourceStr += "\n";
     }
-    shaderSource[2] = fshPath ? fshSourceStr.c_str() : fshSource;
+    shaderSource[3] = fshPath ? fshSourceStr.c_str() : fshSource;
     GL_ASSERT( fragmentShader = glCreateShader(GL_FRAGMENT_SHADER) );
     GL_ASSERT( glShaderSource(fragmentShader, SHADER_SOURCE_LENGTH, shaderSource, NULL) );
     GL_ASSERT( glCompileShader(fragmentShader) );
@@ -316,7 +316,7 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
         
         // Write out the expanded shader file.
         if (fshPath)
-            writeShaderToErrorFile(fshPath, shaderSource[2]);
+            writeShaderToErrorFile(fshPath, shaderSource[3]);
 
         GP_ERROR("Compile failed for fragment shader (%s): %s", fshPath == NULL ? fshSource : fshPath, infoLog == NULL ? "" : infoLog);
         SAFE_DELETE_ARRAY(infoLog);
@@ -608,11 +608,17 @@ void Effect::setValue(Uniform* uniform, const Vector4* values, unsigned int coun
 void Effect::setValue(Uniform* uniform, const Texture::Sampler* sampler)
 {
     GP_ASSERT(uniform);
-    GP_ASSERT(uniform->_type == GL_SAMPLER_2D || uniform->_type == GL_SAMPLER_CUBE);
     GP_ASSERT(sampler);
+
+    if (sampler->isBindless())
+    {
+        GP_ASSERT(uniform->_type == GL_SAMPLER_2D);
+        GL_ASSERT( glProgramUniformHandleui64ARB(_program, uniform->_location, sampler->getHandle()) );
+        return;
+    }
+    GP_ASSERT(uniform->_type == GL_SAMPLER_2D || uniform->_type == GL_SAMPLER_CUBE);
     GP_ASSERT((sampler->getTexture()->getType() == Texture::TEXTURE_2D && uniform->_type == GL_SAMPLER_2D) || 
         (sampler->getTexture()->getType() == Texture::TEXTURE_CUBE && uniform->_type == GL_SAMPLER_CUBE));
-
     GL_ASSERT( glActiveTexture(GL_TEXTURE0 + uniform->_index) );
 
     // Bind the sampler - this binds the texture and applies sampler state
