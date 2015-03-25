@@ -19,7 +19,7 @@ Pass::~Pass()
     SAFE_RELEASE(_vaBinding);
 }
 
-bool Pass::initialize(const char* vshPath, const char* fshPath, const char* defines, const char* version)
+bool Pass::initialize(const char* vshPath, const char* fshPath, const char* defines, const char* version, const char* gshPath)
 {
     GP_ASSERT(vshPath);
     GP_ASSERT(fshPath);
@@ -28,7 +28,7 @@ bool Pass::initialize(const char* vshPath, const char* fshPath, const char* defi
     SAFE_RELEASE(_vaBinding);
 
     // Attempt to create/load the effect.
-    _effect = Effect::createFromFile(vshPath, fshPath, defines, version);
+    _effect = Effect::createFromFile(vshPath, fshPath, defines, version, gshPath);
     if (_effect == NULL)
     {
         GP_WARN("Failed to create effect for pass. vertexShader = %s, fragmentShader = %s, defines = %s, version = %s", vshPath, fshPath, defines ? defines : "", version ? version : "");

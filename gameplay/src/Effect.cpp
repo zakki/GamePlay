@@ -41,7 +41,7 @@ Effect::~Effect()
     }
 }
 
-Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const char* defines, const char* version)
+Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const char* defines, const char* version, const char* gshPath)
 {
     GP_ASSERT(vshPath);
     GP_ASSERT(fshPath);
@@ -51,6 +51,11 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
     uniqueId += ';';
     uniqueId += fshPath;
     uniqueId += ';';
+    if (gshPath)
+    {
+        uniqueId += gshPath;
+        uniqueId += ';';
+    }
     if (defines)
     {
         uniqueId += defines;
@@ -71,6 +76,12 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
         GP_ERROR("Failed to read vertex shader from file '%s'.", vshPath);
         return NULL;
     }
+    char* gshSource = gshPath ? FileSystem::readAll(gshPath) : NULL;
+    if (gshPath != NULL && gshSource == NULL)
+    {
+        GP_ERROR("Failed to read geometry shader from file '%s'.", gshPath);
+        return NULL;
+    }
     char* fshSource = FileSystem::readAll(fshPath);
     if (fshSource == NULL)
     {
@@ -79,9 +90,10 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
         return NULL;
     }
 
-    Effect* effect = createFromSource(vshPath, vshSource, fshPath, fshSource, defines, version);
+    Effect* effect = createFromSource(vshPath, vshSource, gshPath, gshSource, fshPath, fshSource, defines, version);
     
     SAFE_DELETE_ARRAY(vshSource);
+    SAFE_DELETE_ARRAY(gshSource);
     SAFE_DELETE_ARRAY(fshSource);
 
     if (effect == NULL)
@@ -98,9 +110,9 @@ Effect* Effect::createFromFile(const char* vshPath, const char* fshPath, const c
     return effect;
 }
 
-Effect* Effect::createFromSource(const char* vshSource, const char* fshSource, const char* defines, const char* version)
+Effect* Effect::createFromSource(const char* vshSource, const char* fshSource, const char* defines, const char* version, const char* gshSource)
 {
-    return createFromSource(NULL, vshSource, NULL, fshSource, defines, version);
+    return createFromSource(NULL, vshSource, NULL, gshSource, NULL, fshSource, defines, version);
 }
 
 static void replaceDefines(const char* defines, std::string& out)
@@ -226,7 +238,7 @@ static void writeShaderToErrorFile(const char* filePath, const char* source)
     }
 }
 
-Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, const char* fshPath, const char* fshSource, const char* defines, const char* version)
+Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, const char* gshPath, const char* gshSource, const char* fshPath, const char* fshSource, const char* defines, const char* version)
 {
     GP_ASSERT(vshSource);
     GP_ASSERT(fshSource);
@@ -236,14 +248,21 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
     char* infoLog = NULL;
     GLuint vertexShader;
     GLuint fragmentShader;
+    GLuint geometryShader;
     GLuint program;
     GLint length;
     GLint success;
 
+    std::string versionStr = "";
+    if (version)
+    {
+        versionStr += version;
+        versionStr += "\n";
+    }
+    shaderSource[0] = versionStr.c_str();
     // Replace all comma separated definitions with #define prefix and \n suffix
     std::string definesStr = "";
     replaceDefines(defines, definesStr);
-    shaderSource[0] = version ? version : "";
     shaderSource[1] = definesStr.c_str();
     shaderSource[2] = "\n";
     std::string vshSourceStr = "";
@@ -328,10 +347,60 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
         return NULL;
     }
 
+    if (gshSource)
+    {
+        // Compile the geometry shader.
+        std::string gshSourceStr;
+        if (gshPath)
+        {
+            // Replace the #include "xxxxx.xxx" with the sources that come from file paths
+            replaceIncludes(gshPath, gshSource, gshSourceStr);
+            if (gshSource && strlen(gshSource) != 0)
+                gshSourceStr += "\n";
+        }
+        shaderSource[3] = gshPath ? gshSourceStr.c_str() : gshSource;
+        GL_ASSERT(geometryShader = glCreateShader(GL_GEOMETRY_SHADER));
+        GL_ASSERT(glShaderSource(geometryShader, SHADER_SOURCE_LENGTH, shaderSource, NULL));
+        GL_ASSERT(glCompileShader(geometryShader));
+        GL_ASSERT(glGetShaderiv(geometryShader, GL_COMPILE_STATUS, &success));
+        if (success != GL_TRUE)
+        {
+            GL_ASSERT(glGetShaderiv(geometryShader, GL_INFO_LOG_LENGTH, &length));
+            if (length == 0)
+            {
+                length = 4096;
+            }
+            if (length > 0)
+            {
+                infoLog = new char[length];
+                GL_ASSERT(glGetShaderInfoLog(geometryShader, length, NULL, infoLog));
+                infoLog[length - 1] = '\0';
+            }
+
+            // Write out the expanded shader file.
+            if (gshPath)
+                writeShaderToErrorFile(gshPath, shaderSource[3]);
+
+            GP_ERROR("Compile failed for geometry shader (%s): %s", gshPath == NULL ? gshSource : gshPath, infoLog == NULL ? "" : infoLog);
+            SAFE_DELETE_ARRAY(infoLog);
+
+            // Clean up.
+            GL_ASSERT(glDeleteShader(vertexShader));
+            GL_ASSERT(glDeleteShader(fragmentShader));
+            GL_ASSERT(glDeleteShader(geometryShader));
+
+            return NULL;
+        }
+    }
+
     // Link program.
     GL_ASSERT( program = glCreateProgram() );
     GL_ASSERT( glAttachShader(program, vertexShader) );
     GL_ASSERT( glAttachShader(program, fragmentShader) );
+    if (gshSource)
+    {
+        GL_ASSERT(glAttachShader(program, geometryShader));
+    }
     GL_ASSERT( glLinkProgram(program) );
     GL_ASSERT( glGetProgramiv(program, GL_LINK_STATUS, &success) );
 
@@ -399,6 +468,103 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
             SAFE_DELETE_ARRAY(attribName);
         }
     }
+    // Query and store uniform blocks from the program.
+    GLint activeUniformBlocks;
+    GL_ASSERT( glGetProgramiv(program, GL_ACTIVE_UNIFORM_BLOCKS, &activeUniformBlocks) );
+    if (activeUniformBlocks > 0)
+    {
+//        GLuint BufferName;
+//        glGenBuffers(1, &BufferName);
+//        glBindBuffer(GL_UNIFORM_BUFFER, BufferName);
+        GL_ASSERT( glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &length) );
+        for (int uniformBlockIndex = 0; uniformBlockIndex < activeUniformBlocks; uniformBlockIndex++) {
+
+            GLint blockSize;
+            glGetActiveUniformBlockiv(program, uniformBlockIndex, GL_UNIFORM_BLOCK_DATA_SIZE, &blockSize);
+
+            GLint nameLength;
+            glGetActiveUniformBlockiv(program, uniformBlockIndex, GL_UNIFORM_BLOCK_NAME_LENGTH, &nameLength);
+            GLchar* blockName = new GLchar[nameLength];
+            glGetActiveUniformBlockName(program, uniformBlockIndex, nameLength, NULL, blockName);
+
+            Uniform* uniform = new Uniform();
+            uniform->_effect = effect;
+            uniform->_name = blockName;
+            uniform->_location = -1;
+            uniform->_type = GL_UNIFORM_BLOCK;
+            uniform->_uniformBlock = true;
+            effect->_uniforms[blockName] = uniform;
+
+            SAFE_DELETE_ARRAY(blockName);
+
+            int activeUniforms;
+            GL_ASSERT( glGetActiveUniformBlockiv(program, uniformBlockIndex, GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS, &activeUniforms) );
+            if (activeUniforms > 0)
+            {
+                GLuint *indices = new GLuint[activeUniforms];
+                glGetActiveUniformBlockiv(program, uniformBlockIndex, GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES, (GLint*)indices);
+                GLint *offsets = new GLint[activeUniforms];
+                glGetActiveUniformsiv(program, uniformBlockIndex, indices, GL_UNIFORM_OFFSET, offsets);
+#if 0
+                UniformBlock* block = new UniformBlock();
+                block->_index = uniformBlockIndex;
+                block->_effect = effect;
+                block->_size = blockSize;
+                block->_buffer = new GLubyte[blockSize];
+                effect->_uniformBlocks.push_back(block);
+#endif
+                GLchar* uniformName = new GLchar[length + 1];
+                GLint uniformSize;
+                GLenum uniformType;
+                GLint uniformLocation;
+                unsigned int samplerIndex = 0;
+                for (int i = 0; i < activeUniforms; ++i)
+                {
+                    // Query uniform info.
+                    GL_ASSERT(glGetActiveUniform(program, indices[i], length, NULL, &uniformSize, &uniformType, uniformName));
+                    uniformName[length] = '\0';  // null terminate
+                    if (length > 3)
+                    {
+                        // If this is an array uniform, strip array indexers off it since GL does not
+                        // seem to be consistent across different drivers/implementations in how it returns
+                        // array uniforms. On some systems it will return "u_matrixArray", while on others
+                        // it will return "u_matrixArray[0]".
+                        char* c = strrchr(uniformName, '[');
+                        if (c)
+                        {
+                            *c = '\0';
+                        }
+                    }
+                    GP_WARN("BLOCK UNIFORM %s vertexShader = %s, fragmentShader = %s, defines = %s", uniformName, vshPath, fshPath, defines ? defines : "");
+
+                    // Query the pre-assigned uniform location.
+                    GL_ASSERT(uniformLocation = glGetUniformLocation(program, uniformName));
+
+                    Uniform* uniform = new Uniform();
+                    uniform->_effect = effect;
+                    uniform->_name = uniformName;
+                    uniform->_location = uniformLocation;
+                    uniform->_type = uniformType;
+                    uniform->_uniformBlock = true;
+                    if (uniformType == GL_SAMPLER_2D || uniformType == GL_SAMPLER_CUBE)
+                    {
+                        uniform->_index = samplerIndex;
+                        samplerIndex += uniformSize;
+                    }
+                    else
+                    {
+                        uniform->_index = 0;
+                    }
+                    if (effect->_uniforms.find(uniformName) == effect->_uniforms.end())
+                    {
+                        effect->_uniforms[uniformName] = uniform;
+                        //                    block->_uniforms.push_back(uniform);
+                    }
+                }
+                SAFE_DELETE_ARRAY(uniformName);
+            }
+        }
+    }
 
     // Query and store uniforms from the program.
     GLint activeUniforms;
@@ -449,7 +615,9 @@ Effect* Effect::createFromSource(const char* vshPath, const char* vshSource, con
                     uniform->_index = 0;
                 }
 
-                effect->_uniforms[uniformName] = uniform;
+                if (effect->_uniforms.find(uniformName) == effect->_uniforms.end()) {
+                    effect->_uniforms[uniformName] = uniform;
+                }
             }
             SAFE_DELETE_ARRAY(uniformName);
         }
@@ -664,7 +832,7 @@ Effect* Effect::getCurrentEffect()
 }
 
 Uniform::Uniform() :
-    _location(-1), _type(0), _index(0), _effect(NULL)
+    _location(-1), _type(0), _index(0), _effect(NULL), _uniformBlock(false)
 {
 }
 
@@ -688,4 +856,8 @@ const GLenum Uniform::getType() const
     return _type;
 }
 
+bool Uniform::isBlockMember() const
+{
+    return _uniformBlock;
+}
 }

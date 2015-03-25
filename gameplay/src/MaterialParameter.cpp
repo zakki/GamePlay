@@ -467,6 +467,11 @@ void MaterialParameter::bind(Effect* effect)
             return;
         }
     }
+    if (_uniform->isBlockMember())
+    {
+        //GP_WARN("Material parameter is member of uniform buffer : '%s' in effect: '%s'.", _name.c_str(), effect->getId());
+        return;
+    }
 
     switch (_type)
     {

@@ -164,10 +164,10 @@ void Model::setMaterial(Material* material, int partIndex)
     }
 }
 
-Material* Model::setMaterial(const char* vshPath, const char* fshPath, const char* defines, int partIndex, const char* version)
+Material* Model::setMaterial(const char* vshPath, const char* fshPath, const char* defines, int partIndex, const char* version, const char* gshPath)
 {
     // Try to create a Material with the given parameters.
-    Material* material = Material::create(vshPath, fshPath, defines, version);
+    Material* material = Material::create(vshPath, fshPath, defines, version, gshPath);
     if (material == NULL)
     {
         GP_ERROR("Failed to create material for model.");
