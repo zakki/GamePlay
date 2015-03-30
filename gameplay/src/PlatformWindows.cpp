@@ -17,9 +17,8 @@
 #endif
 #include "OVR.h"
 #include "OVR_Kernel.h"
-#include "OVR_CAPI.h"
+#include "OVR_CAPI_0_5_0.h"
 #include "OVR_CAPI_GL.h"
-#include "OVR_Stereo.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -1065,8 +1064,7 @@ Platform* Platform::create(Game* game)
         // Most apps should use the default, but reducing Fov does reduce rendering cost.
         eyeFov[0] = OVR::FovPort::Min(eyeFov[0], OVR::FovPort(__fovSideTanMax));
         eyeFov[1] = OVR::FovPort::Min(eyeFov[1], OVR::FovPort(__fovSideTanMax));
-        unsigned distortionCaps = ovrDistortionCap_Chromatic
-            | ovrDistortionCap_TimeWarp
+        unsigned distortionCaps = ovrDistortionCap_TimeWarp
             | ovrDistortionCap_Overdrive;
 
         ovrBool result = ovrHmd_ConfigureRendering(__HMD, &cfg.Config, distortionCaps,
