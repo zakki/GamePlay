@@ -220,9 +220,21 @@ using std::va_list;
     #define OPENGL_ES
 #elif WIN32
         #define WIN32_LEAN_AND_MEAN
+#ifdef GP_USE_ANGLE
+        #include <GLES2/gl2.h>
+        #include <GLES2/gl2ext.h>
+        extern PFNGLBINDVERTEXARRAYOESPROC glBindVertexArray;
+        extern PFNGLDELETEVERTEXARRAYSOESPROC glDeleteVertexArrays;
+        extern PFNGLGENVERTEXARRAYSOESPROC glGenVertexArrays;
+        extern PFNGLISVERTEXARRAYOESPROC glIsVertexArray;
+        #define GL_DEPTH24_STENCIL8 GL_DEPTH24_STENCIL8_OES
+        #define glClearDepth glClearDepthf
+        #define OPENGL_ES
+#else
         #define GLEW_STATIC
         #include <GL/glew.h>
         #define GP_USE_VAO
+#endif
 #elif __linux__
         #define GLEW_STATIC
         #include <GL/glew.h>
